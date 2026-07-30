@@ -325,8 +325,8 @@ def write_report(
         "# Hydrax Open-Loop Planning Benchmark",
         "",
         "Each run optimizes once from the fixed example initial state. JIT "
-        "Compilation, setup, metric reduction, and output are excluded from "
-        "excluded from planning time. The reported best cost is the minimum "
+        "compilation, setup, metric reduction, and output are excluded from "
+        "planning time. The reported best cost is the minimum "
         "total rollout cost in the final internal optimization iteration.",
         "",
         f"- Backend: `{cfg.backend}`",
