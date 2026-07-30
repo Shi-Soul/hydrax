@@ -1,0 +1,133 @@
+mode: all
+backend: jax
+output_dir: examples/to/results
+domain_seed: 0
+warmup_seed: 999
+tuning_seeds: [100, 101]
+evaluation_seeds: [0, 1, 2, 3, 4]
+
+tasks_to_run:
+  - cart_pole
+  - double_cart_pole
+  - humanoid_standup
+  - pusht
+  - bugtrap
+
+algorithms_to_run:
+  - cbo
+  - mppi_cma
+  - cmaes
+  - cem
+  - ps
+  - dial
+
+tasks:
+  cart_pole:
+    iterations: 10
+    horizon: 2.0
+    samples: 128
+    randomizations: 1
+    knots: 4
+    spline: cubic
+    base_noise: 0.3
+    temperature: 0.1
+  double_cart_pole:
+    iterations: 10
+    horizon: 1.0
+    samples: 1024
+    randomizations: 1
+    knots: 4
+    spline: cubic
+    base_noise: 0.3
+    temperature: 0.1
+  humanoid_standup:
+    iterations: 5
+    horizon: 0.6
+    samples: 128
+    randomizations: 4
+    knots: 4
+    spline: zero
+    base_noise: 0.3
+    temperature: 0.1
+  pusht:
+    iterations: 10
+    horizon: 0.5
+    samples: 128
+    randomizations: 4
+    knots: 6
+    spline: zero
+    base_noise: 0.4
+    temperature: 0.01
+  bugtrap:
+    iterations: 20
+    horizon: 1.0
+    samples: 32
+    randomizations: 1
+    knots: 11
+    spline: zero
+    base_noise: 1.0
+    temperature: 0.01
+
+candidates:
+  cbo:
+    - temperature_scale: 0.1
+      consensus_weight: 1.0
+      noise_weight: 3.0
+      step_size: 0.1
+    - temperature_scale: 1.0
+      consensus_weight: 1.0
+      noise_weight: 7.0
+      step_size: 0.1
+    - temperature_scale: 10.0
+      consensus_weight: 2.0
+      noise_weight: 3.0
+      step_size: 0.05
+  mppi_cma:
+    - temperature_scale: 0.1
+      minimum_noise_ratio: 0.25
+      adaptation_rate: 0.1
+    - temperature_scale: 1.0
+      minimum_noise_ratio: 0.5
+      adaptation_rate: 0.1
+    - temperature_scale: 10.0
+      minimum_noise_ratio: 1.0
+      adaptation_rate: 0.2
+  cmaes:
+    - std_min_ratio: 0.0
+      std_max_ratio: 100.0
+      c_mean: 0.5
+    - std_min_ratio: 0.0
+      std_max_ratio: 100.0
+      c_mean: 1.0
+    - std_min_ratio: 0.1
+      std_max_ratio: 100.0
+      c_mean: 1.0
+  cem:
+    - elite_fraction: 0.05
+      sigma_min_ratio: 0.1
+      explore_fraction: 0.0
+    - elite_fraction: 0.1
+      sigma_min_ratio: 0.25
+      explore_fraction: 0.25
+    - elite_fraction: 0.2
+      sigma_min_ratio: 0.5
+      explore_fraction: 0.5
+  ps:
+    - {}
+  dial:
+    - temperature_scale: 0.1
+      beta_opt_iter: 0.5
+      beta_horizon: 0.5
+    - temperature_scale: 1.0
+      beta_opt_iter: 1.0
+      beta_horizon: 1.0
+    - temperature_scale: 10.0
+      beta_opt_iter: 2.0
+      beta_horizon: 2.0
+
+hydra:
+  job:
+    chdir: false
+  run:
+    dir: .
+  output_subdir: null
