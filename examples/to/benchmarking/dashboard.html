@@ -116,6 +116,7 @@
     <section class="band" id="allocation">
       <div class="section-head"><div><h2>Allocation sensitivity</h2><p>Every I,N point is retained; budget families use a common perceptual color scale.</p></div></div>
       <article class="chart-panel"><div class="panel-head"><h3>Performance vs samples</h3><span>five allocations per O</span></div><div class="chart facets" id="performance-chart"></div></article>
+      <article class="chart-panel" style="margin-top:16px"><div class="panel-head"><h3>Performance vs iterations</h3><span>five allocations per O</span></div><div class="chart facets" id="performance-iterations-chart"></div></article>
       <article class="chart-panel" style="margin-top:16px"><div class="panel-head"><h3>Optimal configuration trajectory</h3><span>point color encodes O</span></div><div class="chart" id="trajectory-chart"></div></article>
     </section>
     <section class="band surface" id="videos">
@@ -124,7 +125,7 @@
     </section>
     <section class="band" id="artifacts">
       <div class="section-head"><div><h2>Reproducible artifacts</h2><p>Raw episodes, aggregated selections, resolved configuration, and vector figures.</p></div></div>
-      <div class="download-row"><a href="__ARTIFACT_PREFIX__grid_results.csv">Raw CSV</a><a href="__ARTIFACT_PREFIX__aggregate_results.csv">Aggregates</a><a href="__ARTIFACT_PREFIX__scaling_results.csv">Scaling selections</a><a href="__ARTIFACT_PREFIX__report.md">Report</a><a href="__ARTIFACT_PREFIX__resolved_config.yaml">Resolved config</a><a href="__ARTIFACT_PREFIX__figures/scaling_curve.pdf">Scaling PDF</a><a href="__ARTIFACT_PREFIX__figures/performance_vs_samples.pdf">Allocation PDF</a></div>
+      <div class="download-row"><a href="__ARTIFACT_PREFIX__grid_results.csv">Raw CSV</a><a href="__ARTIFACT_PREFIX__aggregate_results.csv">Aggregates</a><a href="__ARTIFACT_PREFIX__scaling_results.csv">Scaling selections</a><a href="__ARTIFACT_PREFIX__report.md">Report</a><a href="__ARTIFACT_PREFIX__resolved_config.yaml">Resolved config</a><a href="__ARTIFACT_PREFIX__figures/scaling_curve.pdf">Scaling PDF</a><a href="__ARTIFACT_PREFIX__figures/performance_vs_samples.pdf">Samples PDF</a><a href="__ARTIFACT_PREFIX__figures/performance_vs_iterations.pdf">Iterations PDF</a></div>
     </section>
   </main>
   <footer id="footer"></footer>
@@ -204,15 +205,20 @@
       lineChart(document.getElementById("samples-chart"), scalingSeries("samples"), { xTicks: budgets, yTicks: sampleTicks, xLabel: "Operation budget O", yLabel: "Selected N*", label: "Selected samples", logX: true, logY: true });
     }
 
-    function allocationSeries(method) {
-      return budgets.map((budget, index) => ({ name: `O ${budget}`, color: budgetColors[index], points: data.aggregates.filter(row => row.algorithm === method && row.nominal_operations === budget).sort((a,b) => a.samples-b.samples).map(row => ({ x: row.samples, y: row.mean_cost, std: row.std_cost, title: `${names[method]} / O ${budget} / I ${row.iterations} / N ${row.samples} / mean ${costText(row.mean_cost)}` })) }));
+    function allocationSeries(method, xField) {
+      return budgets.map((budget, index) => ({ name: `O ${budget}`, color: budgetColors[index], points: data.aggregates.filter(row => row.algorithm === method && row.nominal_operations === budget).sort((a,b) => a[xField]-b[xField]).map(row => ({ x: row[xField], y: row.mean_cost, std: row.std_cost, title: `${names[method]} / O ${budget} / I ${row.iterations} / N ${row.samples} / mean ${costText(row.mean_cost)}` })) }));
+    }
+
+    function renderPerformanceChart(targetId, xField, xLabel) {
+      const target = document.getElementById(targetId), chosen = selectedMethods();
+      target.classList.toggle("facets", chosen.length > 1);
+      target.innerHTML = chosen.map(method => `<div class="facet"><h4>${names[method]}</h4><div id="facet-${xField}-${method}"></div></div>`).join("");
+      chosen.forEach(method => { const rows = data.aggregates.filter(row => row.algorithm === method); const ticks = [...new Set(rows.map(row => row[xField]))].sort((a,b) => a-b); lineChart(document.getElementById(`facet-${xField}-${method}`), allocationSeries(method, xField), { xTicks: ticks, xLabel, yLabel: "Episode cost", label: `${names[method]} allocation sensitivity by ${xLabel}`, logX: true, logY: false }); });
     }
 
     function renderPerformance() {
-      const target = document.getElementById("performance-chart"), chosen = selectedMethods();
-      target.classList.toggle("facets", chosen.length > 1);
-      target.innerHTML = chosen.map(method => `<div class="facet"><h4>${names[method]}</h4><div id="facet-${method}"></div></div>`).join("");
-      chosen.forEach(method => { const rows = data.aggregates.filter(row => row.algorithm === method); const ticks = [...new Set(rows.map(row => row.samples))].sort((a,b) => a-b); lineChart(document.getElementById(`facet-${method}`), allocationSeries(method), { xTicks: ticks, xLabel: "Samples N", yLabel: "Episode cost", label: `${names[method]} allocation sensitivity`, logX: true, logY: false }); });
+      renderPerformanceChart("performance-chart", "samples", "Samples N");
+      renderPerformanceChart("performance-iterations-chart", "iterations", "Iterations I");
     }
 
     function renderTrajectory() {

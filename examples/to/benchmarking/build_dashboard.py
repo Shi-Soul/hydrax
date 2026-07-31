@@ -45,7 +45,7 @@ def _render_template(
     payload = payload.replace("</", "<\\/")
     marker = "__BENCHMARK_DATA__"
     prefix_marker = "__ARTIFACT_PREFIX__"
-    if template.count(marker) != 1 or template.count(prefix_marker) != 7:
+    if template.count(marker) != 1 or template.count(prefix_marker) != 8:
         raise ValueError("Dashboard template must contain one data marker")
     return template.replace(marker, payload).replace(
         prefix_marker, artifact_prefix

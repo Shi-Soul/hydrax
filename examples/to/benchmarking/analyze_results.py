@@ -323,8 +323,13 @@ def _plot_optimal_hyperparameters(
         _save_figure(fig, figures_dir, stem)
 
 
-def _plot_performance_vs_samples(
-    aggregates: list[dict[str, Any]], cfg: DictConfig, figures_dir: Path
+def _plot_performance_sensitivity(
+    aggregates: list[dict[str, Any]],
+    cfg: DictConfig,
+    figures_dir: Path,
+    x_field: str,
+    x_label: str,
+    stem: str,
 ) -> None:
     fig, axes = plt.subplots(2, 3, figsize=(7.0, 5.0), sharex=True)
     budgets = sorted(int(value) for value in cfg.operation_budgets)
@@ -341,10 +346,10 @@ def _plot_performance_vs_samples(
                     if row["algorithm"] == algorithm
                     and row["nominal_operations"] == operations
                 ],
-                key=lambda row: row["samples"],
+                key=lambda row: row[x_field],
             )
             axis.errorbar(
-                [row["samples"] for row in rows],
+                [row[x_field] for row in rows],
                 [row["mean_cost"] for row in rows],
                 yerr=[row["std_cost"] for row in rows],
                 color=color,
@@ -355,17 +360,19 @@ def _plot_performance_vs_samples(
             )
         axis.set_xscale("log", base=2)
         axis.set_title(METHOD_NAMES[algorithm])
-        axis.set_xlabel("Samples N")
+        axis.set_xlabel(x_label)
         axis.set_ylabel("Episode cost")
     handles, labels = axes.flat[0].get_legend_handles_labels()
     fig.legend(
         handles, labels, ncol=5, loc="upper center", bbox_to_anchor=(0.5, 1.01)
     )
     fig.suptitle(
-        "Performance across all I,N allocations", y=1.06, weight="bold"
+        f"Performance across all I,N allocations by {x_label}",
+        y=1.06,
+        weight="bold",
     )
     fig.tight_layout()
-    _save_figure(fig, figures_dir, "performance_vs_samples")
+    _save_figure(fig, figures_dir, stem)
 
 
 def _plot_optimal_trajectory(
@@ -546,7 +553,22 @@ def _run(cfg: DictConfig) -> None:
     _configure_plot_style()
     _plot_scaling(scaling, cfg, figures_dir)
     _plot_optimal_hyperparameters(scaling, cfg, figures_dir)
-    _plot_performance_vs_samples(aggregates, cfg, figures_dir)
+    _plot_performance_sensitivity(
+        aggregates,
+        cfg,
+        figures_dir,
+        "samples",
+        "Samples N",
+        "performance_vs_samples",
+    )
+    _plot_performance_sensitivity(
+        aggregates,
+        cfg,
+        figures_dir,
+        "iterations",
+        "Iterations I",
+        "performance_vs_iterations",
+    )
     _plot_optimal_trajectory(scaling, cfg, figures_dir)
     _write_report(output_dir / "report.md", cfg, baseline, scaling)
 
