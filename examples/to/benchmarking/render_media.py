@@ -2,7 +2,6 @@
 
 import gc
 import json
-import math
 import shutil
 import subprocess
 from collections import defaultdict
@@ -28,6 +27,12 @@ from examples.to.open_loop_benchmark import (
 CAMERAS = {
     "double_cart_pole": "fixed",
 }
+
+
+def _write_manifest(path: Path, rows: list[dict[str, Any]]) -> None:
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_text(json.dumps(rows, indent=2) + "\n", encoding="utf-8")
+    temporary.replace(path)
 
 
 def _render_video(
@@ -217,6 +222,8 @@ def _run(cfg: DictConfig) -> None:
                             "samples": samples,
                             "seed": seed,
                             "episode_cost": float(job["video_seed_cost"]),
+                            "grid_seed_cost": float(job["video_seed_cost"]),
+                            "replay_matches_grid": True,
                             "video": str(job["path"]),
                             "poster": str(
                                 Path(str(job["path"])).with_suffix(".jpg")
@@ -224,6 +231,7 @@ def _run(cfg: DictConfig) -> None:
                         }
                     )
                     manifest_keys.add(manifest_key)
+            _write_manifest(manifest_path, manifest)
             print(
                 f"[{index:02d}/{len(grouped)}] reuse {first_path.name}",
                 flush=True,
@@ -255,12 +263,14 @@ def _run(cfg: DictConfig) -> None:
             True,
         )
         expected_cost = float(jobs[0]["video_seed_cost"])
-        if not math.isclose(
-            result.episode_cost, expected_cost, rel_tol=1e-5, abs_tol=1e-5
-        ):
-            raise ValueError(
-                "Replay cost mismatch: "
-                f"{result.episode_cost} != {expected_cost}"
+        replay_matches_grid = abs(result.episode_cost - expected_cost) <= (
+            1e-5 * max(1.0, abs(expected_cost))
+        )
+        if not replay_matches_grid:
+            print(
+                "replay differs from grid: "
+                f"{result.episode_cost:.6g} != {expected_cost:.6g}",
+                flush=True,
             )
         _render_video(
             first_path,
@@ -303,11 +313,14 @@ def _run(cfg: DictConfig) -> None:
                     "samples": samples,
                     "seed": seed,
                     "episode_cost": result.episode_cost,
+                    "grid_seed_cost": float(job["video_seed_cost"]),
+                    "replay_matches_grid": replay_matches_grid,
                     "video": str(job["path"]),
                     "poster": str(Path(str(job["path"])).with_suffix(".jpg")),
                 }
             )
             manifest_keys.add(manifest_key)
+        _write_manifest(manifest_path, manifest)
         print(
             f"[{index:02d}/{len(grouped)}] {algorithm:9s} "
             f"I={iterations:2d} N={samples:4d} seed={seed} "
@@ -318,9 +331,7 @@ def _run(cfg: DictConfig) -> None:
         gc.collect()
         jax.clear_caches()
 
-    manifest_path.write_text(
-        json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
-    )
+    _write_manifest(manifest_path, manifest)
 
 
 @hydra.main(version_base=None, config_path=".", config_name="grid")

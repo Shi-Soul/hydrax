@@ -20,6 +20,24 @@ def _validate_media(output_dir: Path, summary: dict[str, Any]) -> None:
         raise ValueError("Missing dashboard media:\n" + "\n".join(missing))
 
 
+def _attach_replay_costs(output_dir: Path, summary: dict[str, Any]) -> None:
+    manifest_path = output_dir / "media_manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    indexed = {
+        (row["kind"], row["algorithm"], int(row["nominal_operations"])): row
+        for row in manifest
+    }
+    if len(indexed) != 36:
+        raise ValueError(f"Expected 36 media records, found {len(indexed)}")
+    for kind in ("baseline", "scaling"):
+        for row in summary[kind]:
+            key = (kind, row["algorithm"], int(row["nominal_operations"]))
+            replay = indexed[key]
+            row["replay_cost"] = float(replay["episode_cost"])
+            row["replay_seed"] = int(replay["seed"])
+            row["replay_matches_grid"] = bool(replay["replay_matches_grid"])
+
+
 def _render_template(
     template: str, summary: dict[str, Any], artifact_prefix: str
 ) -> str:
@@ -45,6 +63,7 @@ def _prefixed_summary(summary: dict[str, Any], prefix: str) -> dict[str, Any]:
 def _run(cfg: DictConfig) -> None:
     output_dir = Path(str(cfg.output_dir)).resolve()
     summary = json.loads((output_dir / "summary.json").read_text())
+    _attach_replay_costs(output_dir, summary)
     _validate_media(output_dir, summary)
     source_dir = Path(__file__).resolve().parent
     template = (source_dir / "dashboard.html").read_text(encoding="utf-8")

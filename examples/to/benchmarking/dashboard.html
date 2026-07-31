@@ -147,7 +147,7 @@
       return `<article class="result-card" style="--method:${colors[row.algorithm]}">
         <header class="card-head"><div><h3>${names[row.algorithm]}</h3><code>O ${row.nominal_operations} / I ${row.iterations} / N ${row.samples}</code></div><span class="rank">#${rank}</span></header>
         ${video ? `<div class="video-shell"><video controls muted loop playsinline preload="metadata" poster="${row.poster}"><source src="${row.video}" type="video/mp4"></video></div>` : ""}
-        <div class="metrics"><div class="metric"><span>Mean cost</span><strong>${costText(row.mean_cost)}</strong><small>+/- ${costText(row.std_cost)}</small></div><div class="metric"><span>Planning</span><strong>${timeText(row.mean_planning_time_seconds)} s</strong><small>episode total</small></div><div class="metric"><span>Replay seed</span><strong>${row.video_seed}</strong><small>cost ${costText(row.video_seed_cost)}</small></div></div>
+        <div class="metrics"><div class="metric"><span>Mean cost</span><strong>${costText(row.mean_cost)}</strong><small>+/- ${costText(row.std_cost)}</small></div><div class="metric"><span>Planning</span><strong>${timeText(row.mean_planning_time_seconds)} s</strong><small>episode total</small></div><div class="metric"><span>Replay seed</span><strong>${row.replay_seed ?? row.video_seed}</strong><small>cost ${costText(row.replay_cost ?? row.video_seed_cost)}</small></div></div>
       </article>`;
     }
 
