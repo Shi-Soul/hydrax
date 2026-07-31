@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Hydrax Segmented Offline Planning Benchmark</title>
+  <title>Hydrax Receding-Horizon Offline Planning Benchmark</title>
   <style>
     :root {
       color-scheme: light;
@@ -248,7 +248,7 @@
       <div class="brand-mark" aria-hidden="true">H</div>
       <div>
         <p class="brand-name">Hydrax</p>
-        <p class="brand-subtitle">Segmented offline planning benchmark</p>
+        <p class="brand-subtitle">50% execution receding-horizon benchmark</p>
       </div>
     </div>
     <div class="run-meta" id="run-meta" aria-label="实验规模"></div>
@@ -339,7 +339,7 @@
     }
 
     function formatSeconds(value) {
-      return Number(value).toFixed(1);
+      return Number(value).toFixed(2);
     }
 
     function parameterMarkup(parameters) {
@@ -382,10 +382,12 @@
 
     function renderBudget(budget) {
       const items = [
-        ["Iterations / segment", budget.iterations],
-        ["Segment horizon", `${formatSeconds(budget.segment_horizon)} s`],
+        ["Iterations / plan", budget.iterations],
+        ["Plan horizon", `${formatSeconds(budget.segment_horizon)} s`],
+        ["Execution horizon", `${formatSeconds(budget.execution_horizon)} s`],
+        ["Executed / plan", `${(100 * budget.execution_fraction).toFixed(2)}%`],
         ["Total horizon", `${formatSeconds(budget.total_horizon)} s`],
-        ["Segments", budget.segments],
+        ["Planning calls", budget.segments],
         ["Samples / iter", budget.samples],
         ["Randomizations", budget.randomizations],
         ["Knots", budget.knots],

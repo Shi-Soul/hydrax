@@ -149,8 +149,18 @@ def _make_controller(
     raise ValueError(f"Unknown algorithm: {algorithm}")
 
 
+def _execution_steps(
+    controller: SamplingBasedController, execution_fraction: float
+) -> int:
+    steps = int(round(controller.ctrl_steps * execution_fraction))
+    if not 0 < steps <= controller.ctrl_steps:
+        raise ValueError("Execution fraction produces invalid control steps")
+    return steps
+
+
 def _compile(
-    controller: SamplingBasedController, state: Any, seed: int
+    controller: SamplingBasedController,
+    state: Any, seed: int, execution_steps: int,
 ) -> tuple[Callable[[Any, Any], Any], Callable[..., Any]]:
     optimizer = jax.jit(controller.optimize)
     initial_knots = jnp.zeros((controller.num_knots, state.ctrl.shape[0]))
@@ -161,11 +171,11 @@ def _compile(
         id(controller.task), jax.jit(controller.eval_rollouts)
     )
     states, _ = executor(
-        controller.task.model, state, rollouts.controls[:1], rollouts.knots[:1]
+        controller.task.model, state,
+        rollouts.controls[:1, :execution_steps], rollouts.knots[:1]
     )
     jax.block_until_ready(states.qpos)
     state = jax.tree.map(lambda value: value[0, -1], states)
-    params = jax.device_put(controller.init_params(initial_knots, seed), DEVICE)
     params, rollouts = optimizer(state, params)
     jax.block_until_ready((params, rollouts))
     return optimizer, executor
@@ -177,18 +187,18 @@ def _run_episode(
     initial_state: Any,
     seed: int,
     total_horizon: float,
+    execution_steps: int,
     record_trajectory: bool,
 ) -> tuple[float, float, dict[str, Any]]:
     task, (optimizer, executor) = controller.task, compiled
     total_steps = int(round(total_horizon / controller.dt))
-    segments = -(-total_steps // controller.ctrl_steps)
+    segments = -(-total_steps // execution_steps)
     initial_knots = jnp.zeros((controller.num_knots, task.model.nu))
+    params = jax.device_put(controller.init_params(initial_knots, seed), DEVICE)
     state, executed_steps = initial_state, 0
     episode_cost, planning_time = jnp.array(0.0), 0.0
     trajectory_parts: dict[str, list[Any]] = {name: [] for name in STATE_FIELDS}
-    for segment_seed in range(seed * segments, (seed + 1) * segments):
-        params = controller.init_params(initial_knots, segment_seed)
-        params = jax.device_put(params, DEVICE)
+    for _ in range(segments):
         jax.block_until_ready((state, params))
         start = time.perf_counter()
         params, rollouts = optimizer(state, params)
@@ -199,7 +209,7 @@ def _run_episode(
             jnp.isfinite(rollout_costs), rollout_costs, jnp.inf
         )
         best_index = int(jnp.argmin(finite_costs))
-        step_count = min(controller.ctrl_steps, total_steps - executed_steps)
+        step_count = min(execution_steps, total_steps - executed_steps)
         states, executed = executor(
             task.model,
             state,
@@ -208,10 +218,6 @@ def _run_episode(
         )
         jax.block_until_ready((states.qpos, executed.costs))
         episode_cost += jnp.sum(executed.costs[0])
-        selected_knots = rollouts.knots[best_index]
-        initial_knots = jnp.repeat(
-            selected_knots[-1:], controller.num_knots, axis=0
-        )
         if record_trajectory:
             for name in STATE_FIELDS:
                 trajectory_parts[name].append(getattr(states, name)[0])
@@ -226,7 +232,6 @@ def _run_episode(
 
 
 def _evaluate(
-    phase: str,
     task_name: str,
     algorithm: str,
     candidate_index: int,
@@ -236,6 +241,7 @@ def _evaluate(
     state: Any,
     seeds: list[int],
     task_cfg: DictConfig,
+    execution_steps: int,
 ) -> list[dict[str, Any]]:
     parameters = json.dumps(
         OmegaConf.to_container(candidate, resolve=True), sort_keys=True,
@@ -249,10 +255,11 @@ def _evaluate(
             initial_state=state,
             seed=seed,
             total_horizon=float(task_cfg.total_horizon),
+            execution_steps=execution_steps,
             record_trajectory=False,
         )
         total_steps = int(round(float(task_cfg.total_horizon) / controller.dt))
-        segments = -(-total_steps // controller.ctrl_steps)
+        segments = -(-total_steps // execution_steps)
         rows.append(
             {
                 "task": task_name,
@@ -263,6 +270,8 @@ def _evaluate(
                 "planning_time_seconds": elapsed,
                 "iterations": controller.iterations,
                 "segment_horizon": controller.plan_horizon,
+                "execution_horizon": execution_steps * controller.dt,
+                "execution_fraction": execution_steps / controller.ctrl_steps,
                 "total_horizon": float(task_cfg.total_horizon),
                 "segments": segments,
                 "samples": int(task_cfg.samples),
@@ -276,7 +285,7 @@ def _evaluate(
             }
         )
         print(
-            f"{phase:5s} {task_name:20s} {algorithm:9s} "
+            f"eval  {task_name:20s} {algorithm:9s} "
             f"candidate={candidate_index} seed={seed} "
             f"cost={episode_cost:.6g} time={elapsed:.4f}s",
             flush=True,
@@ -297,8 +306,8 @@ def _select_rows(
     rows: list[dict[str, Any]], task_name: str, algorithm: str
 ) -> list[dict[str, Any]]:
     return [
-        row for row in rows
-        if row["task"] == task_name and row["algorithm"] == algorithm
+        row for row in rows if row["task"] == task_name
+        and row["algorithm"] == algorithm
     ]
 
 
@@ -395,9 +404,14 @@ def _write_browser_data(
                 "poster": f"results/media/{task_name}__{algorithm}.jpg",
             }
         task_cfg = cfg.tasks[task_name]
+        budget_row = selected[0]
         tasks[task_name] = {
             "budget": {name: task_cfg[name] for name in BUDGET_FIELDS}
-            | {"segments": int(selected[0]["segments"])},
+            | {
+                "execution_horizon": float(budget_row["execution_horizon"]),
+                "execution_fraction": float(budget_row["execution_fraction"]),
+                "segments": int(selected[0]["segments"]),
+            },
             "algorithms": algorithms,
         }
     payload = {
@@ -431,10 +445,15 @@ def _render_results(cfg: DictConfig, output_dir: Path) -> None:
             controller = _make_controller(
                 algorithm, task, task_cfg, candidate, int(cfg.domain_seed)
             )
-            compiled = _compile(controller, state, int(cfg.warmup_seed))
+            execution_steps = _execution_steps(
+                controller, float(cfg.execution_fraction)
+            )
+            compiled = _compile(
+                controller, state, int(cfg.warmup_seed), execution_steps
+            )
             cost, _, trajectory = _run_episode(
                 controller, compiled, state, int(best["seed"]),
-                float(task_cfg.total_horizon), True
+                float(task_cfg.total_horizon), execution_steps, True
             )
             REPLAY_COSTS[task_name, algorithm] = cost
             path = output_dir / "media" / f"{task_name}__{algorithm}.mp4"
@@ -454,30 +473,30 @@ def _write_report(
     path: Path,
     cfg: DictConfig,
     rows: list[dict[str, Any]],
-    selections: dict[str, Any],
+    selections: DictConfig,
 ) -> None:
     lines = dedent(f"""\
-        # Hydrax Segmented Offline Planning Benchmark
+        # Hydrax Receding-Horizon Offline Planning Benchmark
 
-        Each run executes the best segment, then replans from its final state.
+        Each planning call optimizes $H_k$, executes
+        $E_k = {float(cfg.execution_fraction):.2f}H_k$, then replans.
 
         - Backend: `{cfg.backend}`; device: `{jax.devices()[0]}`
         - Evaluation seeds: `{list(cfg.evaluation_seeds)}`
         - Planning time sums optimizer calls and excludes JIT and execution.
-        - Tuning and evaluation use disjoint seeds and shared task base noise.
-        - Episode cost sums every segment cost, including each terminal cost:
-          $J = \\sum_{{k=1}}^{{K}}[\\sum_{{t=1}}^{{H_k}}\\Delta t\\,
-          \\ell(x_{{k,t}},u_{{k,t}})+\\phi(x_{{k,H_k}})]$.
+        - Parameters come from `{cfg.selected_parameters}`; tuning is not rerun.
+        - Cost sums every executed segment and its terminal cost:
+          $J = \\sum_{{k=1}}^{{K}}[\\sum_{{t=1}}^{{E_k}}\\Delta t\\,
+          \\ell(x_{{k,t}},u_{{k,t}})+\\phi(x_{{k,E_k}})]$.
         """).splitlines()
     columns = (
         "Task Algorithm Episode-cost Planning-time-(ms) Iterations/segment "
-        "Segment-horizon Total-horizon Segments Samples/iter Randomizations "
-        "Knots Spline Frequency Steps Base-noise Selected-parameters"
+        "Plan-horizon Execution-horizon Execution-fraction Total-horizon "
+        "Planning-calls Samples/iter Randomizations Knots Spline Frequency "
+        "Steps Base-noise Selected-parameters"
     ).split()
-    align = (
-        "--- --- ---: ---: ---: ---: ---: ---: ---: ---: ---: --- "
-        "---: ---: ---: ---"
-    ).split()
+    left = {"Task", "Algorithm", "Spline", "Selected-parameters"}
+    align = ["---" if name in left else "---:" for name in columns]
     lines += [
         "",
         "| " + " | ".join(columns) + " |",
@@ -490,10 +509,11 @@ def _write_report(
                 1000.0 * float(row["planning_time_seconds"]) for row in selected
             ]
             row = selected[0]
+            selection = OmegaConf.to_container(
+                selections[task_name][algorithm].parameters, resolve=True
+            )
             params = json.dumps(
-                selections[task_name][algorithm]["parameters"],
-                sort_keys=True,
-                separators=(",", ":"),
+                selection, sort_keys=True, separators=(",", ":")
             )
             lines.append(
                 f"| {task_name} | {algorithm} | "
@@ -502,6 +522,8 @@ def _write_report(
                 f"${statistics.mean(times):.3f} "
                 f"\\pm {statistics.stdev(times):.3f}$ | "
                 f"{row['iterations']} | {float(row['segment_horizon']):.3g} | "
+                f"{float(row['execution_horizon']):.3g} | "
+                f"{float(row['execution_fraction']):.2f} | "
                 f"{float(row['total_horizon']):.3g} | {row['segments']} | "
                 f"{row['samples']} | {row['randomizations']} | "
                 f"{row['knots']} | {row['spline']} | "
@@ -517,10 +539,10 @@ def _write_report(
 def _validate(cfg: DictConfig) -> None:
     if cfg.action not in ("benchmark", "render"):
         raise ValueError("action must be benchmark or render")
-    if len(cfg.tuning_seeds) < 2 or len(cfg.evaluation_seeds) < 2:
-        raise ValueError("Tuning and evaluation each require two seeds")
-    if set(cfg.tuning_seeds) & set(cfg.evaluation_seeds):
-        raise ValueError("Tuning and evaluation seeds must be disjoint")
+    if len(cfg.evaluation_seeds) < 2:
+        raise ValueError("Evaluation requires at least two seeds")
+    if not 0.0 < float(cfg.execution_fraction) <= 1.0:
+        raise ValueError("execution_fraction must be in (0, 1]")
     if set(cfg.tasks_to_run) - set(TASK_TYPES):
         raise ValueError("Unknown task in tasks_to_run")
     if set(cfg.algorithms_to_run) - set(ALGORITHMS):
@@ -530,69 +552,48 @@ def _validate(cfg: DictConfig) -> None:
         values = (task_cfg[name] for name in POSITIVE_FIELDS)
         if any(float(value) <= 0 for value in values):
             raise ValueError(f"Non-positive task value: {task_name}")
-    if any(not cfg.candidates[name] for name in cfg.algorithms_to_run):
-        raise ValueError("Every algorithm requires a candidate")
     if min(cfg.render.width, cfg.render.height, cfg.render.fps) <= 0:
         raise ValueError("Render dimensions and fps must be positive")
 
 
-@hydra.main(version_base=None, config_path=".", config_name="benchmark")
-def main(cfg: DictConfig) -> None:
-    """Tune and evaluate all configured segmented planning algorithms."""
-    _validate(cfg)
-    output_dir = Path(str(cfg.output_dir))
-    if not output_dir.is_absolute():
-        output_dir = Path(__file__).resolve().parents[2] / output_dir
-    output_dir.mkdir(parents=True, exist_ok=True)
-    if cfg.action == "render":
-        _render_results(cfg, output_dir)
-        return
-    tuning_rows, benchmark_rows, selections = [], [], {}
+def _run_benchmark(cfg: DictConfig, output_dir: Path) -> None:
+    selections = OmegaConf.load(Path(str(cfg.selected_parameters)).resolve())
+    rows = []
     for task_name in cfg.tasks_to_run:
         task_cfg = cfg.tasks[task_name]
         task, state = _make_task(task_name, str(cfg.backend))
-        selections[task_name] = {}
         for algorithm in cfg.algorithms_to_run:
-            best_score = float("inf")
-            best: tuple[int, DictConfig, SamplingBasedController, Any]
-            for index, candidate in enumerate(cfg.candidates[algorithm]):
-                controller = _make_controller(
-                    algorithm, task, task_cfg, candidate, int(cfg.domain_seed)
-                )
-                compiled = _compile(controller, state, int(cfg.warmup_seed))
-                rows = _evaluate(
-                    "tune", task_name, algorithm, index, candidate, controller,
-                    compiled, state,
-                    [int(seed) for seed in cfg.tuning_seeds],
-                    task_cfg
-                )
-                tuning_rows.extend(rows)
-                _write_csv(output_dir / "tuning_results.csv", tuning_rows)
-                score = statistics.mean(
-                    float(row["episode_cost"]) for row in rows
-                )
-                if index == 0 or score < best_score:
-                    best_score = score
-                    best = index, candidate, controller, compiled
-            index, candidate, controller, compiled = best
-            selections[task_name][algorithm] = {
-                "candidate": index,
-                "mean_tuning_cost": best_score,
-                "parameters": OmegaConf.to_container(candidate, resolve=True),
-            }
-            OmegaConf.save(
-                config=OmegaConf.create(selections),
-                f=output_dir / "selected_parameters.yaml",
+            selection = selections[task_name][algorithm]
+            candidate = selection.parameters
+            controller = _make_controller(
+                algorithm, task, task_cfg, candidate, int(cfg.domain_seed)
             )
-            rows = _evaluate(
-                "eval", task_name, algorithm, index, candidate, controller,
-                compiled, state,
-                [int(seed) for seed in cfg.evaluation_seeds],
-                task_cfg
+            execution_steps = _execution_steps(
+                controller, float(cfg.execution_fraction)
             )
-            benchmark_rows.extend(rows)
-            _write_csv(output_dir / "benchmark_results.csv", benchmark_rows)
-    _write_report(output_dir / "report.md", cfg, benchmark_rows, selections)
+            compiled = _compile(
+                controller, state, int(cfg.warmup_seed), execution_steps
+            )
+            rows.extend(_evaluate(
+                task_name, algorithm, int(selection.candidate),
+                candidate, controller, compiled, state,
+                [int(seed) for seed in cfg.evaluation_seeds], task_cfg,
+                execution_steps
+            ))
+            _write_csv(output_dir / "benchmark_results.csv", rows)
+    _write_report(output_dir / "report.md", cfg, rows, selections)
+
+
+@hydra.main(version_base=None, config_path=".", config_name="benchmark")
+def main(cfg: DictConfig) -> None:
+    """Evaluate fixed controllers in a segmented offline planning loop."""
+    _validate(cfg)
+    output_dir = Path(str(cfg.output_dir)).resolve()
+    output_dir.mkdir(parents=True, exist_ok=True)
+    if cfg.action == "render":
+        _render_results(cfg, output_dir)
+    else:
+        _run_benchmark(cfg, output_dir)
 
 
 if __name__ == "__main__":

@@ -1,10 +1,11 @@
 backend: jax
 action: benchmark
 output_dir: examples/to/results
+selected_parameters: examples/to/selected_parameters.yaml
 domain_seed: 0
 warmup_seed: 999
-tuning_seeds: [100, 101]
 evaluation_seeds: [0, 1, 2, 3, 4]
+execution_fraction: 0.5
 
 tasks_to_run:
   - cart_pole
@@ -77,63 +78,6 @@ tasks:
     spline: zero
     base_noise: 1.0
     temperature: 0.01
-
-candidates:
-  cbo:
-    - temperature_scale: 0.1
-      consensus_weight: 1.0
-      noise_weight: 3.0
-      step_size: 0.1
-    - temperature_scale: 1.0
-      consensus_weight: 1.0
-      noise_weight: 7.0
-      step_size: 0.1
-    - temperature_scale: 10.0
-      consensus_weight: 2.0
-      noise_weight: 3.0
-      step_size: 0.05
-  mppi_cma:
-    - temperature_scale: 0.1
-      minimum_noise_ratio: 0.25
-      adaptation_rate: 0.1
-    - temperature_scale: 1.0
-      minimum_noise_ratio: 0.5
-      adaptation_rate: 0.1
-    - temperature_scale: 10.0
-      minimum_noise_ratio: 1.0
-      adaptation_rate: 0.2
-  cmaes:
-    - std_min_ratio: 0.0
-      std_max_ratio: 100.0
-      c_mean: 0.5
-    - std_min_ratio: 0.0
-      std_max_ratio: 100.0
-      c_mean: 1.0
-    - std_min_ratio: 0.1
-      std_max_ratio: 100.0
-      c_mean: 1.0
-  cem:
-    - elite_fraction: 0.05
-      sigma_min_ratio: 0.1
-      explore_fraction: 0.0
-    - elite_fraction: 0.1
-      sigma_min_ratio: 0.25
-      explore_fraction: 0.25
-    - elite_fraction: 0.2
-      sigma_min_ratio: 0.5
-      explore_fraction: 0.5
-  ps:
-    - {}
-  dial:
-    - temperature_scale: 0.1
-      beta_opt_iter: 0.5
-      beta_horizon: 0.5
-    - temperature_scale: 1.0
-      beta_opt_iter: 1.0
-      beta_horizon: 1.0
-    - temperature_scale: 10.0
-      beta_opt_iter: 2.0
-      beta_horizon: 2.0
 
 hydra:
   job:
