@@ -69,10 +69,10 @@ tasks:
     base_noise: 0.4
     temperature: 0.01
   bugtrap:
-    iterations: 20
-    segment_horizon: 1.0
+    iterations: 5
+    segment_horizon: 2.0
     total_horizon: 10.0
-    samples: 32
+    samples: 128
     randomizations: 1
     knots: 11
     spline: zero
