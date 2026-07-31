@@ -1,5 +1,5 @@
-mode: all
 backend: jax
+action: benchmark
 output_dir: examples/to/results
 domain_seed: 0
 warmup_seed: 999
@@ -21,10 +21,16 @@ algorithms_to_run:
   - ps
   - dial
 
+render:
+  width: 640
+  height: 400
+  fps: 24
+
 tasks:
   cart_pole:
     iterations: 10
-    horizon: 2.0
+    segment_horizon: 1.0
+    total_horizon: 2.0
     samples: 128
     randomizations: 1
     knots: 4
@@ -33,7 +39,8 @@ tasks:
     temperature: 0.1
   double_cart_pole:
     iterations: 10
-    horizon: 1.0
+    segment_horizon: 1.0
+    total_horizon: 8.0
     samples: 1024
     randomizations: 1
     knots: 4
@@ -42,7 +49,8 @@ tasks:
     temperature: 0.1
   humanoid_standup:
     iterations: 5
-    horizon: 0.6
+    segment_horizon: 0.6
+    total_horizon: 10.0
     samples: 128
     randomizations: 4
     knots: 4
@@ -51,7 +59,8 @@ tasks:
     temperature: 0.1
   pusht:
     iterations: 10
-    horizon: 0.5
+    segment_horizon: 0.5
+    total_horizon: 5.0
     samples: 128
     randomizations: 4
     knots: 6
@@ -60,7 +69,8 @@ tasks:
     temperature: 0.01
   bugtrap:
     iterations: 20
-    horizon: 1.0
+    segment_horizon: 1.0
+    total_horizon: 10.0
     samples: 32
     randomizations: 1
     knots: 11
