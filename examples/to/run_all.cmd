@@ -3,4 +3,4 @@ set -euo pipefail
 
 repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "${repository_root}"
-exec .venv/bin/python examples/to/open_loop_benchmark.py mode=all "$@"
+exec .venv/bin/python examples/to/open_loop_benchmark.py "$@"

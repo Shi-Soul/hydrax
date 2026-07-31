@@ -1,4 +1,3 @@
-mode: all
 backend: jax
 output_dir: examples/to/results
 domain_seed: 0
