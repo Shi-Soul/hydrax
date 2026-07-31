@@ -54,7 +54,7 @@ def _render_template(
         template.count(prefix_marker),
         template.count(task_dashboard_marker),
     )
-    if marker_counts != (1, 8, 1):
+    if marker_counts != (1, 10, 1):
         raise ValueError(f"Unexpected dashboard markers: {marker_counts}")
     return template.replace(marker, payload).replace(
         prefix_marker, artifact_prefix

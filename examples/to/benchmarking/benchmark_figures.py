@@ -189,6 +189,114 @@ def _plot_performance_sensitivity(
     _save_figure(fig, figures_dir, stem)
 
 
+def _plot_planning_time_heatmap(
+    aggregates: list[dict[str, Any]], cfg: DictConfig, figures_dir: Path
+) -> None:
+    budgets = sorted(int(value) for value in cfg.operation_budgets)
+    iterations = sorted(int(value) for value in cfg.iterations)
+    times = np.asarray(
+        [row["mean_planning_time_seconds"] for row in aggregates],
+        dtype=float,
+    )
+    if not np.all(np.isfinite(times)):
+        raise ValueError("Planning-time heatmap requires finite aggregates")
+    color_map = plt.colormaps["viridis"]
+    normalization = matplotlib.colors.Normalize(
+        vmin=float(np.min(times)), vmax=float(np.max(times))
+    )
+    fig, axes = plt.subplots(2, 3, figsize=(7.2, 5.1), sharex=True, sharey=True)
+    image = None
+    for axis, algorithm_value in zip(axes.flat, cfg.algorithms, strict=True):
+        algorithm = str(algorithm_value)
+        indexed = {
+            (row["iterations"], row["nominal_operations"]): row
+            for row in aggregates
+            if row["algorithm"] == algorithm
+        }
+        expected_cells = len(iterations) * len(budgets)
+        if len(indexed) != expected_cells:
+            raise ValueError(
+                f"Expected {expected_cells} planning-time cells for {algorithm}"
+            )
+        matrix = np.asarray(
+            [
+                [
+                    indexed[iteration, budget]["mean_planning_time_seconds"]
+                    for budget in budgets
+                ]
+                for iteration in iterations
+            ],
+            dtype=float,
+        )
+        image = axis.imshow(
+            matrix,
+            cmap=color_map,
+            norm=normalization,
+            origin="lower",
+            aspect="auto",
+        )
+        axis.grid(False)
+        axis.set_title(METHOD_NAMES[algorithm])
+        axis.set_xticks(range(len(budgets)), budgets, rotation=30)
+        axis.set_yticks(range(len(iterations)), iterations)
+        axis.set_xlabel("Operation budget O")
+        axis.set_ylabel("Iterations I")
+        for row_index in range(len(iterations)):
+            for column_index in range(len(budgets)):
+                value = matrix[row_index, column_index]
+                red, green, blue, _ = color_map(normalization(value))
+                luminance = 0.2126 * red + 0.7152 * green + 0.0722 * blue
+                axis.text(
+                    column_index,
+                    row_index,
+                    f"{value:.2f}",
+                    ha="center",
+                    va="center",
+                    color="white" if luminance < 0.48 else "#171b19",
+                    fontsize=6.5,
+                )
+    if image is None:
+        raise ValueError("Planning-time heatmap has no methods")
+    fig.colorbar(
+        image,
+        ax=axes.ravel().tolist(),
+        label="Mean planning time per episode (s)",
+        fraction=0.025,
+        pad=0.025,
+    )
+    fig.suptitle("Actual compute time across I,O allocations", weight="bold")
+    fig.subplots_adjust(top=0.88, right=0.88, hspace=0.34, wspace=0.24)
+    _save_figure(fig, figures_dir, "planning_time_heatmap")
+
+
+def _plot_optimal_planning_time(
+    scaling: list[dict[str, Any]], cfg: DictConfig, figures_dir: Path
+) -> None:
+    fig, axis = plt.subplots(figsize=(6.75, 3.4))
+    for algorithm_value in cfg.algorithms:
+        algorithm = str(algorithm_value)
+        rows = _method_rows(scaling, algorithm)
+        axis.errorbar(
+            [row["nominal_operations"] for row in rows],
+            [row["mean_planning_time_seconds"] for row in rows],
+            yerr=[row["std_planning_time_seconds"] for row in rows],
+            label=METHOD_NAMES[algorithm],
+            color=METHOD_COLORS[algorithm],
+            marker=MARKERS[algorithm],
+            capsize=2.5,
+        )
+    budgets = sorted(int(value) for value in cfg.operation_budgets)
+    axis.set_xscale("log", base=2)
+    axis.set_xticks(budgets)
+    axis.set_xticklabels(budgets)
+    axis.set_ylim(bottom=0)
+    axis.set_xlabel("Operation budget O")
+    axis.set_ylabel("Planning time per episode (s)")
+    axis.set_title("Compute time of cost-optimal allocations")
+    axis.legend(ncol=3, loc="upper center", bbox_to_anchor=(0.5, 1.22))
+    _save_figure(fig, figures_dir, "optimal_configuration_planning_time")
+
+
 def _plot_optimal_trajectory(
     scaling: list[dict[str, Any]], cfg: DictConfig, figures_dir: Path
 ) -> None:
@@ -289,4 +397,6 @@ def write_benchmark_figures(
         "Iterations I",
         "performance_vs_iterations",
     )
+    _plot_planning_time_heatmap(aggregates, cfg, figures_dir)
+    _plot_optimal_planning_time(scaling, cfg, figures_dir)
     _plot_optimal_trajectory(scaling, cfg, figures_dir)
