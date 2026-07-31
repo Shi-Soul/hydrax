@@ -371,7 +371,7 @@ def _plot_performance_vs_samples(
 def _plot_optimal_trajectory(
     scaling: list[dict[str, Any]], cfg: DictConfig, figures_dir: Path
 ) -> None:
-    fig, axis = plt.subplots(figsize=(6.75, 3.8))
+    fig, axis = plt.subplots(figsize=(8.0, 4.0))
     budgets = sorted(int(value) for value in cfg.operation_budgets)
     budget_colors = plt.colormaps["viridis"](
         np.linspace(0.12, 0.88, len(budgets))
@@ -426,18 +426,18 @@ def _plot_optimal_trajectory(
         )
         for operations in budgets
     ]
-    method_legend = axis.legend(
+    fig.subplots_adjust(right=0.72)
+    fig.legend(
         handles=method_handles,
-        ncol=3,
+        ncol=1,
         loc="upper left",
-        bbox_to_anchor=(1.01, 1.0),
+        bbox_to_anchor=(0.73, 0.9),
     )
-    axis.add_artist(method_legend)
-    axis.legend(
+    fig.legend(
         handles=budget_handles,
         ncol=1,
-        loc="lower left",
-        bbox_to_anchor=(1.01, 0.0),
+        loc="upper left",
+        bbox_to_anchor=(0.73, 0.46),
     )
     _save_figure(fig, figures_dir, "optimal_configuration_trajectory")
 

@@ -179,7 +179,16 @@ def _run(cfg: DictConfig) -> None:
     )
     for job in _jobs(summary):
         grouped[_job_key(job)].append(job)
-    manifest = []
+    manifest_path = output_dir / "media_manifest.json"
+    manifest = (
+        json.loads(manifest_path.read_text())
+        if manifest_path.exists() and bool(cfg.resume)
+        else []
+    )
+    manifest_keys = {
+        (row["kind"], row["algorithm"], int(row["nominal_operations"]))
+        for row in manifest
+    }
 
     for index, (key, jobs) in enumerate(grouped.items(), start=1):
         algorithm, iterations, samples, seed = key
@@ -190,6 +199,31 @@ def _run(cfg: DictConfig) -> None:
             for job in jobs
         )
         if bool(cfg.resume) and existing:
+            for job in jobs:
+                manifest_key = (
+                    job["kind"],
+                    algorithm,
+                    int(job["nominal_operations"]),
+                )
+                if manifest_key not in manifest_keys:
+                    manifest.append(
+                        {
+                            "kind": job["kind"],
+                            "algorithm": algorithm,
+                            "nominal_operations": int(
+                                job["nominal_operations"]
+                            ),
+                            "iterations": iterations,
+                            "samples": samples,
+                            "seed": seed,
+                            "episode_cost": float(job["video_seed_cost"]),
+                            "video": str(job["path"]),
+                            "poster": str(
+                                Path(str(job["path"])).with_suffix(".jpg")
+                            ),
+                        }
+                    )
+                    manifest_keys.add(manifest_key)
             print(
                 f"[{index:02d}/{len(grouped)}] reuse {first_path.name}",
                 flush=True,
@@ -245,6 +279,21 @@ def _run(cfg: DictConfig) -> None:
                 first_path.with_suffix(".jpg"), destination.with_suffix(".jpg")
             )
         for job in jobs:
+            manifest_key = (
+                job["kind"],
+                algorithm,
+                int(job["nominal_operations"]),
+            )
+            manifest = [
+                row
+                for row in manifest
+                if (
+                    row["kind"],
+                    row["algorithm"],
+                    int(row["nominal_operations"]),
+                )
+                != manifest_key
+            ]
             manifest.append(
                 {
                     "kind": job["kind"],
@@ -258,6 +307,7 @@ def _run(cfg: DictConfig) -> None:
                     "poster": str(Path(str(job["path"])).with_suffix(".jpg")),
                 }
             )
+            manifest_keys.add(manifest_key)
         print(
             f"[{index:02d}/{len(grouped)}] {algorithm:9s} "
             f"I={iterations:2d} N={samples:4d} seed={seed} "
@@ -268,7 +318,7 @@ def _run(cfg: DictConfig) -> None:
         gc.collect()
         jax.clear_caches()
 
-    (output_dir / "media_manifest.json").write_text(
+    manifest_path.write_text(
         json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
     )
 
