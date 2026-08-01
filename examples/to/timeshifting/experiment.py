@@ -51,6 +51,17 @@ def write_rows(path: Path, rows: list[dict[str, Any]]) -> None:
     temporary.replace(path)
 
 
+def load_rows(path: Path) -> list[dict[str, Any]]:
+    """Load previously completed episodes for resumable execution."""
+    if not path.exists():
+        return []
+    with path.open(newline="", encoding="utf-8") as stream:
+        reader = csv.DictReader(stream)
+        if reader.fieldnames != FIELDS:
+            raise ValueError(f"Unexpected result schema in {path}")
+        return list(reader)
+
+
 def aggregate(rows: list[dict[str, Any]], cfg: DictConfig) -> list[dict[str, Any]]:
     """Summarize every paired mode and step-count condition."""
     results = []
@@ -104,7 +115,16 @@ def run(cfg: DictConfig) -> None:
     )
     task, state = make_task(str(cfg.task), str(cfg.backend))
     selections = OmegaConf.load(Path(str(cfg.selected_parameters)).resolve())
-    rows: list[dict[str, Any]] = []
+    results_path = output_dir / "episode_results.csv"
+    rows: dict[tuple[str, str, str, int], dict[str, Any]] = {
+        (
+            str(row["algorithm"]),
+            str(row["mode"]),
+            str(row["shift_name"]),
+            int(row["seed"]),
+        ): row
+        for row in load_rows(results_path)
+    }
     trajectories: dict[tuple[str, str, str], Any] = {}
 
     for algorithm_value in cfg.algorithms:
@@ -133,6 +153,10 @@ def run(cfg: DictConfig) -> None:
                 )
                 for seed_value in cfg.seeds:
                     seed = int(seed_value)
+                    key = (algorithm, mode, str(shift_name), seed)
+                    record = seed == int(cfg.video_seed)
+                    if not record and key in rows:
+                        continue
                     result = run_episode(
                         controller,
                         compiled,
@@ -140,9 +164,9 @@ def run(cfg: DictConfig) -> None:
                         seed,
                         float(cfg.task_config.total_horizon),
                         shift_steps,
-                        seed == int(cfg.video_seed),
+                        record,
                     )
-                    rows.append({
+                    row = {
                         "algorithm": algorithm,
                         "mode": mode,
                         "shift_name": str(shift_name),
@@ -151,7 +175,15 @@ def run(cfg: DictConfig) -> None:
                         "seed": seed,
                         "episode_cost": result.episode_cost,
                         "planning_time_seconds": result.planning_time_seconds,
-                    })
+                    }
+                    rows[key] = row
+                    write_rows(
+                        results_path,
+                        [
+                            rows[existing_key]
+                            for existing_key in sorted(rows)
+                        ],
+                    )
                     print(
                         f"{algorithm} mode={mode} shift={shift_steps} steps "
                         f"({shift_steps * controller.dt:.3f}s) seed={seed} "
@@ -159,10 +191,11 @@ def run(cfg: DictConfig) -> None:
                         f"time={result.planning_time_seconds:.3f}s",
                         flush=True,
                     )
-                    if seed == int(cfg.video_seed):
+                    if record:
                         trajectories[(algorithm, mode, str(shift_name))] = result.trajectory
 
-    write_rows(output_dir / "episode_results.csv", rows)
+    final_rows = [rows[key] for key in sorted(rows)]
+    write_rows(results_path, final_rows)
     for (algorithm, mode, shift_name), trajectory in trajectories.items():
         _render_video(
             output_dir / f"media/{algorithm}_{mode}_{shift_name}.mp4",
@@ -179,8 +212,8 @@ def run(cfg: DictConfig) -> None:
         "backend": jax.default_backend(),
         "device": str(jax.devices()[0]),
         "config": OmegaConf.to_container(cfg, resolve=True),
-        "aggregates": aggregate(rows, cfg),
-        "episodes": rows,
+        "aggregates": aggregate(final_rows, cfg),
+        "episodes": final_rows,
     }
     (output_dir / "summary.json").write_text(
         json.dumps(summary, indent=2) + "\n", encoding="utf-8"
