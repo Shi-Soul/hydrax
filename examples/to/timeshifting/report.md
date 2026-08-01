@@ -12,14 +12,17 @@
 
 ## Results
 
-| Algorithm | Shift | Legacy cost | Reset cost | Shift cost |
+All costs below are episode cost divided by the total number of planning
+calls for that shift length (1 step: 1000, 5 steps: 200, 25 steps: 40).
+
+| Algorithm | Shift | Legacy cost/plan | Reset cost/plan | Shift cost/plan |
 |---|---:|---:|---:|---:|
-| CBO | 1 step | 80249.69 | 30987.53 | 28110.82 |
-| CBO | 5 steps | 26865.02 | 6335.38 | 7723.78 |
-| CBO | 25 steps | 3678.09 | 2210.79 | 2239.82 |
-| CEM | 1 step | 42371.85 | 57136.86 | 39078.52 |
-| CEM | 5 steps | 11245.60 | 10570.65 | 11866.87 |
-| CEM | 25 steps | 3303.28 | 2862.30 | 2639.51 |
+| CBO | 1 step | 80.25 | 30.99 | 28.11 |
+| CBO | 5 steps | 134.33 | 31.68 | 38.62 |
+| CBO | 25 steps | 91.95 | 55.27 | 56.00 |
+| CEM | 1 step | 42.37 | 57.14 | 39.08 |
+| CEM | 5 steps | 56.23 | 52.85 | 59.33 |
+| CEM | 25 steps | 82.58 | 71.56 | 65.99 |
 
 CBO benefits strongly from both reset and correct shifting. CEM shows a
 mixed but useful signal: correct shifting is best at 1 step and 25 steps,

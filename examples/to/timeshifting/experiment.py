@@ -2,6 +2,7 @@
 
 import csv
 import json
+import math
 import subprocess
 from datetime import datetime
 from pathlib import Path
@@ -22,7 +23,7 @@ from examples.to.open_loop_benchmark import (
 
 FIELDS = (
     "algorithm mode shift_name shift_steps shift_seconds seed episode_cost "
-    "planning_time_seconds"
+    "raw_episode_cost planning_calls planning_time_seconds"
 ).split()
 
 
@@ -166,6 +167,11 @@ def run(cfg: DictConfig) -> None:
                         shift_steps,
                         record,
                     )
+                    total_steps = int(
+                        round(float(cfg.task_config.total_horizon) / controller.dt)
+                    )
+                    planning_calls = math.ceil(total_steps / shift_steps)
+                    raw_cost = result.episode_cost
                     row = {
                         "algorithm": algorithm,
                         "mode": mode,
@@ -173,7 +179,9 @@ def run(cfg: DictConfig) -> None:
                         "shift_steps": shift_steps,
                         "shift_seconds": shift_steps * controller.dt,
                         "seed": seed,
-                        "episode_cost": result.episode_cost,
+                        "episode_cost": raw_cost / planning_calls,
+                        "raw_episode_cost": raw_cost,
+                        "planning_calls": planning_calls,
                         "planning_time_seconds": result.planning_time_seconds,
                     }
                     rows[key] = row
@@ -218,7 +226,82 @@ def run(cfg: DictConfig) -> None:
     (output_dir / "summary.json").write_text(
         json.dumps(summary, indent=2) + "\n", encoding="utf-8"
     )
+    render_figures(output_dir, summary["aggregates"])
     render_dashboard(output_dir / "index.html", summary)
+
+
+def render_figures(output_dir: Path, aggregates: list[dict[str, Any]]) -> None:
+    """Render PNG cost curves with mean and one-standard-deviation bars."""
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    figures_dir = output_dir / "figures"
+    figures_dir.mkdir(exist_ok=True)
+    steps = sorted({int(row["shift_steps"]) for row in aggregates})
+    colors = {
+        "legacy": "#b46a2d",
+        "reset": "#6c4fa1",
+        "shift": "#0f8a72",
+    }
+    linestyles = {"cbo": "-", "cem": "--"}
+    markers = {"cbo": "o", "cem": "s"}
+    scopes = [
+        ("cost_all.png", "All algorithm / mode combinations", ("cbo", "cem")),
+        ("cost_cbo.png", "CBO", ("cbo",)),
+        ("cost_cem.png", "CEM", ("cem",)),
+    ]
+    all_costs = []
+    for row in aggregates:
+        all_costs.extend(
+            [row["mean_cost"] - row["std_cost"], row["mean_cost"] + row["std_cost"]]
+        )
+    y_low = max(min(all_costs) * 0.7, 1e-3)
+    y_high = max(all_costs) * 1.3
+
+    for filename, title, algorithms in scopes:
+        fig, ax = plt.subplots(figsize=(8.2, 5.0))
+        for algorithm in algorithms:
+            for mode in ("legacy", "reset", "shift"):
+                rows = sorted(
+                    (
+                        row
+                        for row in aggregates
+                        if row["algorithm"] == algorithm and row["mode"] == mode
+                    ),
+                    key=lambda row: row["shift_steps"],
+                )
+                xs = [int(row["shift_steps"]) for row in rows]
+                ys = [float(row["mean_cost"]) for row in rows]
+                errors = [float(row["std_cost"]) for row in rows]
+                label = (
+                    f"{algorithm.upper()} {mode.capitalize()}"
+                    if len(algorithms) > 1
+                    else mode.capitalize()
+                )
+                ax.errorbar(
+                    xs,
+                    ys,
+                    yerr=errors,
+                    fmt=markers[algorithm] + linestyles[algorithm],
+                    color=colors[mode],
+                    capsize=4,
+                    markeredgecolor="white",
+                    markeredgewidth=0.8,
+                    label=label,
+                )
+        ax.set_yscale("log")
+        ax.set_ylim(y_low, y_high)
+        ax.set_xticks(steps)
+        ax.set_xlabel("Shift steps")
+        ax.set_ylabel("Mean episode cost / planning call (log)")
+        ax.set_title(title)
+        ax.grid(alpha=0.3)
+        ax.legend(frameon=False)
+        fig.tight_layout()
+        fig.savefig(figures_dir / filename, dpi=200)
+        plt.close(fig)
 
 
 @hydra.main(version_base=None, config_path=".", config_name="experiment")

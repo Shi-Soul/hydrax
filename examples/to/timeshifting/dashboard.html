@@ -38,7 +38,7 @@ section { background: var(--panel); border: 1px solid var(--line); border-radius
 .chart-panel { border-top: 4px solid var(--shift); }
 .chart-panel.wide { grid-column: 1 / -1; }
 .chart-panel h3 { margin-top: 4px; }
-svg { display: block; width: 100%; height: auto; overflow: visible; }
+img { display: block; width: 100%; height: auto; background: #ffffff; }
 .gridline { stroke: #dbe2da; stroke-width: 1; }
 .axis { stroke: #66736a; stroke-width: 1.2; }
 .tick { fill: #536057; font: 10px ui-monospace, monospace; }
@@ -92,11 +92,11 @@ footer { padding: 22px; color: #727d75; text-align: center; font: 10px/1.6 ui-mo
 <main>
   <section id="charts">
     <h2>Cost vs shift steps</h2>
-    <p class="meta">Mean episode cost with one-sample-standard-deviation error bars. Shift length is reported in executed control steps; seconds are shown only as a conversion.</p>
+    <p class="meta">Mean episode cost per planning call with one-sample-standard-deviation error bars. Shift length is reported in executed control steps; seconds are shown only as a conversion.</p>
     <div class="chart-grid">
-      <article class="chart-panel wide"><h3>All algorithm / mode combinations</h3><div id="chart-all"></div></article>
-      <article class="chart-panel"><h3>CBO</h3><div id="chart-cbo"></div></article>
-      <article class="chart-panel"><h3>CEM</h3><div id="chart-cem"></div></article>
+      <article class="chart-panel wide"><h3>All algorithm / mode combinations</h3><img src="figures/cost_all.png" alt="Cost versus shift steps for all algorithm and mode combinations"></article>
+      <article class="chart-panel"><h3>CBO</h3><img src="figures/cost_cbo.png" alt="Cost versus shift steps for CBO"></article>
+      <article class="chart-panel"><h3>CEM</h3><img src="figures/cost_cem.png" alt="Cost versus shift steps for CEM"></article>
     </div>
   </section>
   <section id="clusters">
@@ -107,7 +107,7 @@ footer { padding: 22px; color: #727d75; text-align: center; font: 10px/1.6 ui-mo
   <section id="table">
     <h2>Repeated episode summary</h2>
     <table>
-      <thead><tr><th>Algorithm</th><th>Shift steps</th><th>Mode</th><th>Mean cost</th><th>Cost std</th><th>Mean planning s</th><th>Seeds</th></tr></thead>
+      <thead><tr><th>Algorithm</th><th>Shift steps</th><th>Mode</th><th>Mean cost/plan</th><th>Std/plan</th><th>Mean planning s</th><th>Seeds</th></tr></thead>
       <tbody id="summary-rows"></tbody>
     </table>
   </section>
@@ -138,46 +138,6 @@ const rowFor = (alg, mode, steps) => d.aggregates.find(r => r.algorithm === alg 
 document.querySelector("#meta").textContent = "Double Cart Pole / 1024 samples x 4 optimizer iterations / 10 s episodes / " + d.device + " / commit " + d.git_commit.slice(0, 10);
 document.querySelector("#footer").textContent = "generated " + d.created_at + " / git " + d.git_commit;
 
-function svgChart(target, series) {
-  const width = 860, height = 330, margin = { top: 48, right: 30, bottom: 54, left: 74 };
-  const xs = shiftSteps;
-  const xMap = i => margin.left + i * (width - margin.left - margin.right) / (xs.length - 1);
-  const lows = series.flatMap(s => s.points.map(p => Math.max(1e-3, p.mean - p.std)));
-  const highs = series.flatMap(s => s.points.map(p => p.mean + p.std));
-  let yMin = Math.min(...lows), yMax = Math.max(...highs);
-  const logMin = Math.log10(yMin), logMax = Math.log10(yMax);
-  const yMap = v => margin.top + (logMax - Math.log10(v)) / (logMax - logMin) * (height - margin.top - margin.bottom);
-  const yTicks = [];
-  for (let exp = Math.ceil(logMin); exp <= Math.floor(logMax); exp++) yTicks.push(10 ** exp);
-  let svg = `<svg viewBox="0 0 ${width} ${height}" role="img">`;
-  xs.forEach((x, i) => { const px = xMap(i); svg += `<line class="gridline" x1="${px}" y1="${margin.top}" x2="${px}" y2="${height - margin.bottom}"/><text class="tick" x="${px}" y="${height - margin.bottom + 20}" text-anchor="middle">${x}</text>`; });
-  yTicks.forEach(y => { const py = yMap(y); svg += `<line class="gridline" x1="${margin.left}" y1="${py}" x2="${width - margin.right}" y2="${py}"/><text class="tick" x="${margin.left - 9}" y="${py + 3}" text-anchor="end">${y >= 1000 ? (y / 1000) + "k" : y}</text>`; });
-  svg += `<line class="axis" x1="${margin.left}" y1="${margin.top}" x2="${margin.left}" y2="${height - margin.bottom}"/><line class="axis" x1="${margin.left}" y1="${height - margin.bottom}" x2="${width - margin.right}" y2="${height - margin.bottom}"/>`;
-  svg += `<text class="axis-label" x="${(margin.left + width - margin.right) / 2}" y="${height - 10}" text-anchor="middle">shift steps</text><text class="axis-label" transform="translate(15 ${(margin.top + height - margin.bottom) / 2}) rotate(-90)" text-anchor="middle">mean episode cost (log)</text>`;
-  series.forEach((s, si) => {
-    s.points.forEach((p, i) => {
-      const px = xMap(i), py = yMap(p.mean), lowY = yMap(Math.max(1e-3, p.mean - p.std)), highY = yMap(p.mean + p.std);
-      svg += `<line x1="${px}" y1="${lowY}" x2="${px}" y2="${highY}" stroke="${s.color}" stroke-width="1.5"/><line x1="${px - 4}" y1="${lowY}" x2="${px + 4}" y2="${lowY}" stroke="${s.color}"/><line x1="${px - 4}" y1="${highY}" x2="${px + 4}" y2="${highY}" stroke="${s.color}"/>`;
-    });
-    const path = s.points.map((p, i) => `${i ? "L" : "M"}${xMap(i).toFixed(2)},${yMap(p.mean).toFixed(2)}`).join(" ");
-    svg += `<path d="${path}" fill="none" stroke="${s.color}" stroke-width="2.2"/>`;
-    s.points.forEach((p, i) => svg += `<circle cx="${xMap(i)}" cy="${yMap(p.mean)}" r="4.5" fill="${s.color}"><title>${s.name} / ${p.mean.toFixed(2)} +/- ${p.std.toFixed(2)}</title></circle>`);
-    const legendY = 14 + si * 14, legendX = margin.left + (si % 3) * 220 + Math.floor(si / 3) * 260;
-    svg += `<line x1="${legendX}" y1="${legendY}" x2="${legendX + 20}" y2="${legendY}" stroke="${s.color}" stroke-width="2.5"/><text class="legend" x="${legendX + 26}" y="${legendY + 3.5}">${s.name}</text>`;
-  });
-  svg += `</svg>`;
-  target.innerHTML = svg;
-}
-
-const seriesFor = (algorithms, modes) => algorithms.flatMap(alg => modes.map(mode => ({
-  name: alg.toUpperCase() + " / " + modeName(mode),
-  color: mode === "legacy" ? modeColor("legacy") : mode === "reset" ? modeColor("reset") : modeColor("shift"),
-  points: shiftSteps.map(steps => { const r = rowFor(alg, mode, steps); return { mean: r.mean_cost, std: r.std_cost }; })
-})));
-svgChart(document.querySelector("#chart-all"), seriesFor(algorithms, modes));
-svgChart(document.querySelector("#chart-cbo"), seriesFor(["cbo"], modes));
-svgChart(document.querySelector("#chart-cem"), seriesFor(["cem"], modes));
-
 document.querySelector("#shift-clusters").innerHTML = shiftSteps.map(steps => {
   const seconds = rowFor("cbo", "legacy", steps).shift_seconds;
   const blocks = algorithms.map(alg => {
@@ -186,8 +146,8 @@ document.querySelector("#shift-clusters").innerHTML = shiftSteps.map(steps => {
       return `<article class="mode-card" style="--mode:${modeColor(mode)}">
         <header><span class="mode-name">${modeName(mode)}</span><h4>${alg.toUpperCase()}</h4></header>
         <div class="metrics">
-          <div class="metric"><span>Mean cost</span><strong>${fmt(r.mean_cost)}</strong></div>
-          <div class="metric"><span>Std cost</span><strong>${fmt(r.std_cost)}</strong></div>
+          <div class="metric"><span>Cost / plan</span><strong>${fmt(r.mean_cost)}</strong></div>
+          <div class="metric"><span>Std / plan</span><strong>${fmt(r.std_cost)}</strong></div>
           <div class="metric"><span>Planning</span><strong>${timeFmt(r.mean_planning_time_seconds)} s</strong></div>
         </div>
         <video controls muted loop playsinline poster="${r.poster}"><source src="${r.video}" type="video/mp4"></video>
