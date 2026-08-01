@@ -262,6 +262,7 @@ def render_figures(output_dir: Path, aggregates: list[dict[str, Any]]) -> None:
 
     for filename, title, algorithms in scopes:
         fig, ax = plt.subplots(figsize=(8.2, 5.0))
+        positions = list(range(len(steps)))
         for algorithm in algorithms:
             for mode in ("legacy", "reset", "shift"):
                 rows = sorted(
@@ -272,7 +273,7 @@ def render_figures(output_dir: Path, aggregates: list[dict[str, Any]]) -> None:
                     ),
                     key=lambda row: row["shift_steps"],
                 )
-                xs = [int(row["shift_steps"]) for row in rows]
+                xs = positions
                 ys = [float(row["mean_cost"]) for row in rows]
                 errors = [float(row["std_cost"]) for row in rows]
                 label = (
@@ -293,7 +294,9 @@ def render_figures(output_dir: Path, aggregates: list[dict[str, Any]]) -> None:
                 )
         ax.set_yscale("log")
         ax.set_ylim(y_low, y_high)
-        ax.set_xticks(steps)
+        ax.set_xticks(positions)
+        ax.set_xticklabels([str(step) for step in steps])
+        ax.set_xlim(-0.3, len(steps) - 0.7)
         ax.set_xlabel("Shift steps")
         ax.set_ylabel("Mean episode cost / planning call (log)")
         ax.set_title(title)
