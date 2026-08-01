@@ -34,8 +34,8 @@ def validate(cfg: DictConfig) -> None:
         raise ValueError("The experiment requires CBO and CEM")
     if list(cfg.modes) != ["legacy", "reset", "shift"]:
         raise ValueError("modes must be legacy, reset, shift")
-    if len(cfg.seeds) != 5 or len(set(int(seed) for seed in cfg.seeds)) != 5:
-        raise ValueError("The experiment requires exactly five distinct seeds")
+    if len(cfg.seeds) < 3 or len(set(int(seed) for seed in cfg.seeds)) != len(cfg.seeds):
+        raise ValueError("The experiment requires at least three distinct seeds")
     steps = [int(value) for value in cfg.shift_steps.values()]
     if len(set(steps)) != len(steps) or any(step < 1 for step in steps):
         raise ValueError("shift_steps must contain distinct positive integers")

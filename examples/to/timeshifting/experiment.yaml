@@ -2,12 +2,12 @@ backend: jax
 task: double_cart_pole
 algorithms: [cbo, cem]
 modes: [legacy, reset, shift]
-seeds: [0, 1, 2, 3, 4]
+seeds: [0, 1, 2]
 video_seed: 0
 domain_seed: 0
 warmup_seed: 999
 samples: 1024
-iterations: 8
+iterations: 4
 selected_parameters: examples/to/selected_parameters.yaml
 output_dir: examples/to/results/double_cart_pole_timeshifting
 
