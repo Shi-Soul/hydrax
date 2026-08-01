@@ -91,12 +91,11 @@ class CEM(SamplingBasedController):
         new_tk: jax.Array,
         new_mean: jax.Array,
     ) -> CEMParams:
-        """Shift CEM's knot-indexed proposal scales with its mean."""
+        """Reset CEM's knot-indexed proposal scales after a time shift."""
+        del old_tk
         shifted_cov = jax.lax.cond(
             self.shift_algorithm_state,
-            lambda: self.interp_func(
-                jnp.clip(new_tk, old_tk[0], old_tk[-1]), old_tk, params.cov[None]
-            )[0],
+            lambda: jnp.full_like(params.cov, self.sigma_start),
             lambda: params.cov,
         )
         return params.replace(tk=new_tk, mean=new_mean, cov=shifted_cov)
