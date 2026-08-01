@@ -1,0 +1,40 @@
+backend: jax
+task: double_cart_pole
+algorithms: [cbo, cem]
+solutions: [false, true]
+seeds: [0, 1, 2, 3, 4]
+video_seed: 0
+domain_seed: 0
+warmup_seed: 999
+samples: 1024
+iterations: 8
+selected_parameters: examples/to/selected_parameters.yaml
+output_dir: examples/to/results/double_cart_pole_timeshifting
+
+shift_lengths:
+  short:
+    execution_fraction: 0.1
+  long:
+    execution_fraction: 0.5
+
+task_config:
+  segment_horizon: 1.0
+  total_horizon: 10.0
+  randomizations: 1
+  knots: 6
+  spline: cubic
+  base_noise: 0.3
+  temperature: 0.1
+
+render:
+  width: 640
+  height: 400
+  fps: 24
+
+hydra:
+  job:
+    chdir: false
+  run:
+    dir: .
+  output_subdir: null
+

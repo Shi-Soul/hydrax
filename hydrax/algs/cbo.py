@@ -48,6 +48,7 @@ class CBO(SamplingBasedController):
         consensus_weight: float,
         noise_weight: float,
         step_size: float = 0.1,
+        shift_algorithm_state: bool = False,
         num_randomizations: int = 1,
         risk_strategy: RiskStrategy = None,
         seed: int = 0,
@@ -94,6 +95,24 @@ class CBO(SamplingBasedController):
         self.consensus_weight = consensus_weight
         self.noise_weight = noise_weight
         self.step_size = step_size
+        self.shift_algorithm_state = shift_algorithm_state
+
+    def shift_params(
+        self,
+        params: CBOParams,
+        old_tk: jax.Array,
+        new_tk: jax.Array,
+        new_mean: jax.Array,
+    ) -> CBOParams:
+        """Shift every CBO particle when algorithm-state shifting is enabled."""
+        shifted_samples = jax.lax.cond(
+            self.shift_algorithm_state,
+            lambda: self.interp_func(
+                jnp.clip(new_tk, old_tk[0], old_tk[-1]), old_tk, params.samples
+            ),
+            lambda: params.samples,
+        )
+        return params.replace(tk=new_tk, mean=new_mean, samples=shifted_samples)
 
     def init_params(
         self, initial_knots: jax.Array = None, seed: int = 0

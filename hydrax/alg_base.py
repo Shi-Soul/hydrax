@@ -145,8 +145,8 @@ class SamplingBasedController(ABC):
         # which can produce wildly wrong values for linear/cubic splines.
         clamped_tk = jnp.clip(new_tk, tk[0], tk[-1])
 
-        new_mean = self.interp_func(clamped_tk, tk, params.mean[None, ...])[0] 
-        params = params.replace(tk=new_tk, mean=new_mean)
+        new_mean = self.interp_func(clamped_tk, tk, params.mean[None, ...])[0]
+        params = self.shift_params(params, tk, new_tk, new_mean)
 
         def _optimize_scan_body(params: Any, _: Any):
             # Sample random control sequences from spline knots
@@ -175,6 +175,22 @@ class SamplingBasedController(ABC):
         rollouts_final = jax.tree.map(lambda x: x[-1], rollouts)
 
         return params, rollouts_final
+
+    def shift_params(
+        self,
+        params: SamplingParams,
+        old_tk: jax.Array,
+        new_tk: jax.Array,
+        new_mean: jax.Array,
+    ) -> SamplingParams:
+        """Advance the warm-start distribution to the current knot grid.
+
+        The default preserves the historical behaviour: only the public mean is
+        shifted. Algorithms with knot-indexed proposal state may override this
+        method when ``shift_algorithm_state`` is enabled.
+        """
+        del old_tk
+        return params.replace(tk=new_tk, mean=new_mean)
 
     def rollout_with_randomizations(
         self,
