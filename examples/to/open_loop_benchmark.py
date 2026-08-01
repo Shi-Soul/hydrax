@@ -77,7 +77,7 @@ def make_controller(
     domain_seed: int,
     samples: int,
     iterations: int,
-    shift_algorithm_state: bool = False,
+    time_shift_mode: str = "legacy",
 ) -> SamplingBasedController:
     """Construct one controller with fixed algorithm-specific parameters."""
     if algorithm not in ALGORITHMS:
@@ -103,7 +103,7 @@ def make_controller(
             consensus_weight=float(candidate["consensus_weight"]),
             noise_weight=float(candidate["noise_weight"]),
             step_size=float(candidate["step_size"]),
-            shift_algorithm_state=shift_algorithm_state,
+            time_shift_mode=time_shift_mode,
             **shared,
         )
     if algorithm == "mppi_cma":
@@ -136,7 +136,7 @@ def make_controller(
             sigma_start=base_noise,
             sigma_min=base_noise * float(candidate["sigma_min_ratio"]),
             explore_fraction=float(candidate["explore_fraction"]),
-            shift_algorithm_state=shift_algorithm_state,
+            time_shift_mode=time_shift_mode,
             **shared,
         )
     if algorithm == "ps":

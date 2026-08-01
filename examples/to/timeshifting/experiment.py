@@ -1,4 +1,4 @@
-"""Run the complete CBO/CEM time-shifting experiment and publish evidence."""
+"""Run the complete CBO/CEM time-shifting mode experiment."""
 
 import csv
 import json
@@ -9,32 +9,36 @@ from typing import Any
 
 import hydra
 import jax
-import mujoco
 import numpy as np
 from omegaconf import DictConfig, OmegaConf
 
 from examples.to.benchmarking.render_media import _render_video
 from examples.to.open_loop_benchmark import (
     compile_controller,
-    execution_steps,
     make_controller,
     make_task,
     run_episode,
 )
 
-FIELDS = "algorithm solution shift_length seed episode_cost planning_time_seconds execution_fraction execution_horizon".split()
+FIELDS = (
+    "algorithm mode shift_name shift_steps shift_seconds seed episode_cost "
+    "planning_time_seconds"
+).split()
 
 
 def validate(cfg: DictConfig) -> None:
     """Validate the fixed, GPU-only paired experimental design."""
     if jax.default_backend() != "gpu":
-        raise RuntimeError("The complete time-shifting experiment must run on a GPU")
-    if list(cfg.algorithms) != ["cbo", "cem"] or list(cfg.solutions) != [False, True]:
-        raise ValueError("The experiment requires CBO/CEM and legacy/corrected modes")
+        raise RuntimeError("The complete experiment must run on a GPU")
+    if list(cfg.algorithms) != ["cbo", "cem"]:
+        raise ValueError("The experiment requires CBO and CEM")
+    if list(cfg.modes) != ["legacy", "reset", "shift"]:
+        raise ValueError("modes must be legacy, reset, shift")
     if len(cfg.seeds) != 5 or len(set(int(seed) for seed in cfg.seeds)) != 5:
         raise ValueError("The experiment requires exactly five distinct seeds")
-    if float(cfg.shift_lengths.short.execution_fraction) >= float(cfg.shift_lengths.long.execution_fraction):
-        raise ValueError("short shifting must be smaller than long shifting")
+    steps = [int(value) for value in cfg.shift_steps.values()]
+    if len(set(steps)) != len(steps) or any(step < 1 for step in steps):
+        raise ValueError("shift_steps must contain distinct positive integers")
 
 
 def write_rows(path: Path, rows: list[dict[str, Any]]) -> None:
@@ -48,29 +52,43 @@ def write_rows(path: Path, rows: list[dict[str, Any]]) -> None:
 
 
 def aggregate(rows: list[dict[str, Any]], cfg: DictConfig) -> list[dict[str, Any]]:
-    """Summarize every paired correction/shift condition."""
+    """Summarize every paired mode and step-count condition."""
     results = []
     for algorithm in cfg.algorithms:
-        for enabled in cfg.solutions:
-            for shift_length in cfg.shift_lengths:
-                subset = [row for row in rows if row["algorithm"] == algorithm and row["solution"] == str(bool(enabled)).lower() and row["shift_length"] == shift_length]
+        for mode in cfg.modes:
+            for shift_name, shift_steps_value in cfg.shift_steps.items():
+                shift_steps = int(shift_steps_value)
+                subset = [
+                    row
+                    for row in rows
+                    if row["algorithm"] == algorithm
+                    and row["mode"] == mode
+                    and row["shift_name"] == shift_name
+                ]
                 if len(subset) != len(cfg.seeds):
-                    raise ValueError(f"Incomplete condition: {algorithm} {enabled} {shift_length}")
+                    raise ValueError(f"Incomplete condition: {algorithm} {mode} {shift_name}")
                 costs = np.asarray([float(row["episode_cost"]) for row in subset])
                 times = np.asarray([float(row["planning_time_seconds"]) for row in subset])
-                mode = "corrected" if enabled else "legacy"
-                media = f"media/{algorithm}_{mode}_{shift_length}.mp4"
+                media = f"media/{algorithm}_{mode}_{shift_name}.mp4"
                 results.append({
-                    "algorithm": algorithm, "solution": mode, "shift_length": shift_length,
-                    "mean_cost": float(costs.mean()), "std_cost": float(costs.std(ddof=1)),
-                    "mean_planning_time_seconds": float(times.mean()), "std_planning_time_seconds": float(times.std(ddof=1)),
-                    "seed_count": len(subset), "video": media, "poster": media.replace(".mp4", ".jpg"),
+                    "algorithm": algorithm,
+                    "mode": mode,
+                    "shift_name": shift_name,
+                    "shift_steps": shift_steps,
+                    "shift_seconds": float(subset[0]["shift_seconds"]),
+                    "mean_cost": float(costs.mean()),
+                    "std_cost": float(costs.std(ddof=1)),
+                    "mean_planning_time_seconds": float(times.mean()),
+                    "std_planning_time_seconds": float(times.std(ddof=1)),
+                    "seed_count": len(subset),
+                    "video": media,
+                    "poster": media.replace(".mp4", ".jpg"),
                 })
     return results
 
 
 def render_dashboard(path: Path, summary: dict[str, Any]) -> None:
-    """Create a self-contained local HTML comparison dashboard."""
+    """Create a self-contained local comparison dashboard."""
     template = (Path(__file__).parent / "dashboard.html").read_text(encoding="utf-8")
     payload = json.dumps(summary, separators=(",", ":"), allow_nan=False).replace("</", "<\\/")
     path.write_text(template.replace("__TIME_SHIFT_DATA__", payload), encoding="utf-8")
@@ -81,29 +99,92 @@ def run(cfg: DictConfig) -> None:
     validate(cfg)
     output_dir = Path(str(cfg.output_dir)).resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
-    (output_dir / "resolved_config.yaml").write_text(OmegaConf.to_yaml(cfg, resolve=True), encoding="utf-8")
+    (output_dir / "resolved_config.yaml").write_text(
+        OmegaConf.to_yaml(cfg, resolve=True), encoding="utf-8"
+    )
     task, state = make_task(str(cfg.task), str(cfg.backend))
     selections = OmegaConf.load(Path(str(cfg.selected_parameters)).resolve())
-    rows, trajectories = [], {}
-    for algorithm in cfg.algorithms:
-        for enabled in cfg.solutions:
-            for shift_length, shift_cfg in cfg.shift_lengths.items():
-                controller = make_controller(algorithm, task, cfg.task_config, selections[cfg.task][algorithm].parameters, int(cfg.domain_seed), int(cfg.samples), int(cfg.iterations), bool(enabled))
-                steps = execution_steps(controller, float(shift_cfg.execution_fraction))
-                compiled = compile_controller(controller, state, int(cfg.warmup_seed), steps)
-                for seed in cfg.seeds:
-                    record = int(seed) == int(cfg.video_seed)
-                    result = run_episode(controller, compiled, state, int(seed), float(cfg.task_config.total_horizon), steps, record)
-                    rows.append({"algorithm": algorithm, "solution": str(bool(enabled)).lower(), "shift_length": shift_length, "seed": int(seed), "episode_cost": result.episode_cost, "planning_time_seconds": result.planning_time_seconds, "execution_fraction": steps / controller.ctrl_steps, "execution_horizon": steps * controller.dt})
-                    print(f"{algorithm} solution={enabled} shift={shift_length} seed={seed} cost={result.episode_cost:.6g} time={result.planning_time_seconds:.3f}s", flush=True)
-                    if record:
-                        trajectories[(algorithm, bool(enabled), shift_length)] = result.trajectory
+    rows: list[dict[str, Any]] = []
+    trajectories: dict[tuple[str, str, str], Any] = {}
+
+    for algorithm_value in cfg.algorithms:
+        algorithm = str(algorithm_value)
+        candidate = selections[cfg.task][algorithm].parameters
+        for mode_value in cfg.modes:
+            mode = str(mode_value)
+            controller = make_controller(
+                algorithm,
+                task,
+                cfg.task_config,
+                candidate,
+                int(cfg.domain_seed),
+                int(cfg.samples),
+                int(cfg.iterations),
+                mode,
+            )
+            for shift_name, shift_steps_value in cfg.shift_steps.items():
+                shift_steps = int(shift_steps_value)
+                if shift_steps > controller.ctrl_steps:
+                    raise ValueError(
+                        f"{shift_name}={shift_steps} exceeds {controller.ctrl_steps} control steps"
+                    )
+                compiled = compile_controller(
+                    controller, state, int(cfg.warmup_seed), shift_steps
+                )
+                for seed_value in cfg.seeds:
+                    seed = int(seed_value)
+                    result = run_episode(
+                        controller,
+                        compiled,
+                        state,
+                        seed,
+                        float(cfg.task_config.total_horizon),
+                        shift_steps,
+                        seed == int(cfg.video_seed),
+                    )
+                    rows.append({
+                        "algorithm": algorithm,
+                        "mode": mode,
+                        "shift_name": str(shift_name),
+                        "shift_steps": shift_steps,
+                        "shift_seconds": shift_steps * controller.dt,
+                        "seed": seed,
+                        "episode_cost": result.episode_cost,
+                        "planning_time_seconds": result.planning_time_seconds,
+                    })
+                    print(
+                        f"{algorithm} mode={mode} shift={shift_steps} steps "
+                        f"({shift_steps * controller.dt:.3f}s) seed={seed} "
+                        f"cost={result.episode_cost:.6g} "
+                        f"time={result.planning_time_seconds:.3f}s",
+                        flush=True,
+                    )
+                    if seed == int(cfg.video_seed):
+                        trajectories[(algorithm, mode, str(shift_name))] = result.trajectory
+
     write_rows(output_dir / "episode_results.csv", rows)
-    for (algorithm, enabled, shift_length), trajectory in trajectories.items():
-        mode = "corrected" if enabled else "legacy"
-        _render_video(output_dir / f"media/{algorithm}_{mode}_{shift_length}.mp4", str(cfg.task), task, state, trajectory, float(cfg.task_config.total_horizon), cfg.render)
-    summary = {"created_at": datetime.now().astimezone().isoformat(), "git_commit": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(), "backend": jax.default_backend(), "device": str(jax.devices()[0]), "config": OmegaConf.to_container(cfg, resolve=True), "aggregates": aggregate(rows, cfg), "episodes": rows}
-    (output_dir / "summary.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
+    for (algorithm, mode, shift_name), trajectory in trajectories.items():
+        _render_video(
+            output_dir / f"media/{algorithm}_{mode}_{shift_name}.mp4",
+            str(cfg.task),
+            task,
+            state,
+            trajectory,
+            float(cfg.task_config.total_horizon),
+            cfg.render,
+        )
+    summary = {
+        "created_at": datetime.now().astimezone().isoformat(),
+        "git_commit": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
+        "backend": jax.default_backend(),
+        "device": str(jax.devices()[0]),
+        "config": OmegaConf.to_container(cfg, resolve=True),
+        "aggregates": aggregate(rows, cfg),
+        "episodes": rows,
+    }
+    (output_dir / "summary.json").write_text(
+        json.dumps(summary, indent=2) + "\n", encoding="utf-8"
+    )
     render_dashboard(output_dir / "index.html", summary)
 
 

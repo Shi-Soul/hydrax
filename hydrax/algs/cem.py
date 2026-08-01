@@ -35,7 +35,7 @@ class CEM(SamplingBasedController):
         sigma_min: float,
         num_randomizations: int = 1,
         explore_fraction: float = 0.0,
-        shift_algorithm_state: bool = False,
+        time_shift_mode: Literal["legacy", "reset", "shift"] = "legacy",
         risk_strategy: RiskStrategy = None,
         seed: int = 0,
         plan_horizon: float = 1.0,
@@ -82,7 +82,9 @@ class CEM(SamplingBasedController):
         self.sigma_start = sigma_start
         self.num_elites = num_elites
         self.num_explore = int(self.num_samples * explore_fraction)
-        self.shift_algorithm_state = shift_algorithm_state
+        if time_shift_mode not in ("legacy", "reset", "shift"):
+            raise ValueError(f"Unknown time-shift mode: {time_shift_mode}")
+        self.time_shift_mode = time_shift_mode
 
     def shift_params(
         self,
@@ -91,14 +93,19 @@ class CEM(SamplingBasedController):
         new_tk: jax.Array,
         new_mean: jax.Array,
     ) -> CEMParams:
-        """Reset CEM's knot-indexed proposal scales after a time shift."""
-        del old_tk
-        shifted_cov = jax.lax.cond(
-            self.shift_algorithm_state,
-            lambda: jnp.full_like(params.cov, self.sigma_start),
-            lambda: params.cov,
-        )
-        return params.replace(tk=new_tk, mean=new_mean, cov=shifted_cov)
+        """Apply the selected CEM proposal-scale time-shift treatment."""
+        if self.time_shift_mode == "legacy":
+            return params.replace(tk=new_tk, mean=new_mean)
+        if self.time_shift_mode == "reset":
+            return params.replace(
+                tk=new_tk,
+                mean=new_mean,
+                cov=jnp.full_like(params.cov, self.sigma_start),
+            )
+        cov = self.interp_func(
+            jnp.clip(new_tk, old_tk[0], old_tk[-1]), old_tk, params.cov[None]
+        )[0]
+        return params.replace(tk=new_tk, mean=new_mean, cov=cov)
 
     def init_params(
         self, initial_knots: jax.Array = None, seed: int = 0
