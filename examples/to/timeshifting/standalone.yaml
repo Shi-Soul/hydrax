@@ -1,0 +1,9 @@
+output_dir: examples/to/results/double_cart_pole_timeshifting
+output_file: timeshifting_standalone.html
+
+hydra:
+  job:
+    chdir: false
+  run:
+    dir: .
+  output_subdir: null
