@@ -20,7 +20,7 @@ reduction, and output are excluded from planning time.
 |---|---|
 | `source/` | Exact tracked source snapshot from commit `04a236e`. |
 | `results/tuning_results.csv` | 160 candidate-by-seed tuning rows. |
-| `results/benchmark_results.csv` | 150 evaluation rows: 5 tasks x 6 methods x 5 seeds. |
+| `results/benchmark_results.csv` | 150 evaluation rows covering five tasks, six methods, and five seeds. |
 | `results/selected_parameters.yaml` | Parameters selected by the tuning run. |
 | `results/report.md` | Full aggregate report with mean and sample standard deviation. |
 

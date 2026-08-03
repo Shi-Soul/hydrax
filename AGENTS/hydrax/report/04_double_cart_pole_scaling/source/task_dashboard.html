@@ -1,0 +1,486 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,">
+  <title>Hydrax Receding-Horizon Offline Planning Benchmark</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #151817;
+      --muted: #656a67;
+      --paper: #f1f1ed;
+      --surface: #ffffff;
+      --line: #d7d8d3;
+      --strong-line: #a9aca6;
+      --accent: #e34f31;
+      --radius: 6px;
+      font-family: Inter, "Segoe UI", "Noto Sans SC", Arial, sans-serif;
+      font-synthesis: none;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      letter-spacing: 0;
+    }
+
+    button, summary { font: inherit; }
+
+    .topbar {
+      min-height: 70px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 28px;
+      padding: 14px max(24px, calc((100vw - 1440px) / 2));
+      background: #111412;
+      color: #f7f6f1;
+      border-bottom: 3px solid var(--accent);
+    }
+
+    .brand { display: flex; align-items: center; gap: 16px; min-width: 0; }
+
+    .brand-mark {
+      width: 32px;
+      height: 32px;
+      display: grid;
+      place-items: center;
+      border: 1px solid #747973;
+      border-radius: 4px;
+      color: #ff6a49;
+      font: 700 18px/1 ui-monospace, SFMono-Regular, Consolas, monospace;
+    }
+
+    .brand-name { margin: 0; font-size: 17px; font-weight: 750; }
+
+    .brand-subtitle {
+      margin: 2px 0 0;
+      color: #aeb3ad;
+      font: 11px/1.3 ui-monospace, SFMono-Regular, Consolas, monospace;
+      text-transform: uppercase;
+    }
+
+    .run-meta { display: flex; gap: 24px; color: #b9bdb8; font-size: 12px; }
+    .run-meta strong { color: #fff; font-size: 14px; }
+    .topbar-actions { display: flex; align-items: center; gap: 22px; }
+    .dashboard-link { padding: 7px 9px; color: #f7f6f1; border: 1px solid #747973; border-radius: 4px; font-size: 11px; font-weight: 700; text-decoration: none; }
+    .dashboard-link:hover { border-color: #ff6a49; color: #ff8b70; }
+    .dashboard-link:focus-visible { outline: 2px solid #ff6a49; outline-offset: 2px; }
+
+    main { width: min(1440px, 100%); margin: 0 auto; padding: 0 24px 48px; }
+
+    .task-tabs {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      display: flex;
+      overflow-x: auto;
+      scrollbar-width: thin;
+      background: var(--paper);
+      border-bottom: 1px solid var(--strong-line);
+    }
+
+    .task-tab {
+      flex: 0 0 auto;
+      min-height: 52px;
+      padding: 0 18px;
+      border: 0;
+      border-bottom: 3px solid transparent;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 650;
+    }
+
+    .task-tab:hover { color: var(--ink); background: #e8e8e3; }
+    .task-tab[aria-selected="true"] { color: var(--ink); border-color: var(--accent); }
+    .task-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; }
+
+    .overview { padding: 34px 0 30px; border-bottom: 1px solid var(--strong-line); }
+
+    .overview-head {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 24px;
+      margin-bottom: 28px;
+    }
+
+    .eyebrow {
+      margin: 0 0 5px;
+      color: var(--accent);
+      font: 700 11px/1.2 ui-monospace, SFMono-Regular, Consolas, monospace;
+      text-transform: uppercase;
+    }
+
+    h1 { margin: 0; font-size: 32px; line-height: 1.08; font-weight: 780; }
+
+    .winner {
+      min-width: 260px;
+      padding-left: 18px;
+      border-left: 3px solid var(--winner-color, var(--accent));
+    }
+
+    .winner-label { display: block; color: var(--muted); font-size: 11px; }
+    .winner-name { display: block; margin-top: 3px; font-size: 17px; font-weight: 750; }
+    .winner-value { display: block; margin-top: 3px; color: var(--muted); font: 12px/1.4 ui-monospace, SFMono-Regular, Consolas, monospace; }
+
+    .overview-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(290px, 1fr); gap: 48px; }
+    .section-label { margin: 0 0 14px; color: var(--muted); font-size: 12px; font-weight: 700; }
+
+    .rank-header, .rank-row {
+      display: grid;
+      grid-template-columns: 148px minmax(80px, 1fr) 108px 94px;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .rank-header {
+      padding: 0 0 7px;
+      color: #777c78;
+      border-bottom: 1px solid var(--line);
+      font-size: 10px;
+      text-transform: uppercase;
+    }
+
+    .rank-row { min-height: 39px; border-bottom: 1px solid var(--line); font-size: 12px; }
+    .rank-name { display: flex; align-items: center; gap: 9px; min-width: 0; font-weight: 650; }
+    .rank-swatch { width: 8px; height: 8px; flex: 0 0 auto; background: var(--algo-color); }
+    .rank-track { height: 6px; background: #dedfda; overflow: hidden; }
+    .rank-fill { display: block; height: 100%; background: var(--algo-color); }
+    .rank-number, .rank-time { text-align: right; font: 11px/1 ui-monospace, SFMono-Regular, Consolas, monospace; }
+    .rank-time { color: var(--muted); }
+
+    .budget { border-left: 1px solid var(--strong-line); padding-left: 28px; }
+    .budget-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .budget-item { min-height: 66px; padding: 10px 12px 10px 0; border-bottom: 1px solid var(--line); }
+    .budget-key { display: block; color: var(--muted); font-size: 10px; text-transform: uppercase; }
+    .budget-value { display: block; margin-top: 5px; text-align: right; font: 700 15px/1.2 ui-monospace, SFMono-Regular, Consolas, monospace; overflow-wrap: anywhere; }
+
+    .results-head { display: flex; justify-content: space-between; gap: 20px; align-items: baseline; padding: 27px 0 15px; }
+    .results-head h2 { margin: 0; font-size: 17px; }
+    .results-note { color: var(--muted); font-size: 11px; }
+
+    .result-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+
+    .result-card {
+      min-width: 0;
+      overflow: hidden;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-top: 4px solid var(--algo-color);
+      border-radius: var(--radius);
+    }
+
+    .card-head { min-height: 69px; display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 13px 16px; }
+    .algorithm { min-width: 0; }
+    .algorithm h3 { margin: 0; font-size: 16px; }
+    .algorithm-meta { margin-top: 4px; color: var(--muted); font: 10px/1.3 ui-monospace, SFMono-Regular, Consolas, monospace; }
+
+    .best-badge {
+      flex: 0 0 auto;
+      padding: 4px 7px;
+      border: 1px solid var(--algo-color);
+      border-radius: 3px;
+      color: var(--ink);
+      background: #fff;
+      font-size: 9px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    .video-shell { aspect-ratio: 8 / 5; background: #121917; border-block: 1px solid #292f2c; }
+    video { display: block; width: 100%; height: 100%; object-fit: cover; background: #121917; }
+
+    .metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-bottom: 1px solid var(--line); }
+    .metric { min-height: 76px; padding: 13px 15px; border-right: 1px solid var(--line); }
+    .metric:last-child { border-right: 0; }
+    .metric-label { display: block; color: var(--muted); font-size: 10px; }
+    .metric-value { display: block; margin-top: 7px; font: 700 14px/1.1 ui-monospace, SFMono-Regular, Consolas, monospace; overflow-wrap: anywhere; }
+    .metric-spread { display: block; margin-top: 4px; color: var(--muted); font: 10px/1.2 ui-monospace, SFMono-Regular, Consolas, monospace; }
+    .metric-value, .metric-spread { text-align: right; }
+    .winner-value, .rank-number, .rank-time, .budget-value, .metric-value,
+    .metric-spread, .candidate, .parameter dd, .run-meta {
+      font-variant-numeric: tabular-nums lining-nums;
+    }
+
+    details { padding: 0 15px; }
+    summary { min-height: 47px; display: flex; align-items: center; justify-content: space-between; gap: 12px; cursor: pointer; color: var(--muted); font-size: 11px; }
+    summary::marker { color: var(--algo-color); }
+    .candidate { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+    .parameters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 18px; margin: 0; padding: 0 0 14px; }
+    .parameter { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-top: 1px solid var(--line); font-size: 10px; }
+    .parameter dt { min-width: 0; color: var(--muted); overflow-wrap: anywhere; }
+    .parameter dd { margin: 0; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+    .empty-parameters { margin: 0; padding: 0 0 15px; color: var(--muted); font-size: 11px; }
+
+    footer { padding: 24px; color: #777c78; border-top: 1px solid var(--line); text-align: center; font: 10px/1.4 ui-monospace, SFMono-Regular, Consolas, monospace; }
+
+    @media (max-width: 900px) {
+      .run-meta { display: none; }
+      .overview-grid, .result-grid { grid-template-columns: 1fr; }
+      .budget { border-left: 0; border-top: 1px solid var(--strong-line); padding: 22px 0 0; }
+    }
+
+    @media (max-width: 620px) {
+      .topbar { min-height: 62px; padding: 12px 16px; }
+      main { padding-inline: 14px; }
+      .task-tab { min-height: 48px; padding-inline: 14px; }
+      .overview { padding-top: 25px; }
+      .overview-head { align-items: flex-start; flex-direction: column; }
+      h1 { font-size: 26px; }
+      .winner { min-width: 0; width: 100%; }
+      .rank-header, .rank-row { grid-template-columns: 112px minmax(60px, 1fr) 83px; gap: 8px; }
+      .rank-time { display: none; }
+      .result-grid { gap: 14px; }
+      .metrics { grid-template-columns: 1fr 1fr; }
+      .metric:nth-child(2) { border-right: 0; }
+      .metric:last-child { grid-column: 1 / -1; border-top: 1px solid var(--line); }
+      .parameters { grid-template-columns: 1fr; }
+      .results-note { max-width: 155px; text-align: right; }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">H</div>
+      <div>
+        <p class="brand-name">Hydrax</p>
+        <p class="brand-subtitle">50% execution receding-horizon benchmark</p>
+      </div>
+    </div>
+    <div class="topbar-actions">
+      <div class="run-meta" id="run-meta" aria-label="实验规模"></div>
+      <a class="dashboard-link" href="index.html">Scaling study</a>
+    </div>
+  </header>
+
+  <main>
+    <nav class="task-tabs" id="task-tabs" role="tablist" aria-label="任务"></nav>
+
+    <section class="overview" aria-labelledby="task-title">
+      <div class="overview-head">
+        <div>
+          <p class="eyebrow">Benchmark task</p>
+          <h1 id="task-title"></h1>
+        </div>
+        <div class="winner" id="winner"></div>
+      </div>
+
+      <div class="overview-grid">
+        <div>
+          <p class="section-label">跨 seed 平均累计分段代价排名</p>
+          <div class="rank-header" aria-hidden="true">
+            <span>算法</span><span>任务内相对区间</span><span style="text-align:right">代价</span><span style="text-align:right">规划时间</span>
+          </div>
+          <div id="ranking"></div>
+        </div>
+        <aside class="budget" aria-labelledby="budget-title">
+          <p class="section-label" id="budget-title">任务内统一计算与规划配置</p>
+          <div class="budget-grid" id="budget"></div>
+        </aside>
+      </div>
+    </section>
+
+    <div class="results-head">
+      <h2>各算法最优轨迹</h2>
+      <span class="results-note">完整视频重放该算法评测中最低代价 seed</span>
+    </div>
+    <section class="result-grid" id="result-grid" aria-live="polite"></section>
+  </main>
+
+  <footer id="footer"></footer>
+
+  <script src="results/browser_data.js"></script>
+  <script>
+    "use strict";
+
+    const data = window.HYDRAX_RESULTS;
+    if (!data) throw new Error("Missing results/browser_data.js");
+
+    const taskNames = {
+      cart_pole: "Cart Pole",
+      double_cart_pole: "Double Cart Pole",
+      humanoid_standup: "Humanoid Standup",
+      pusht: "Push-T",
+      bugtrap: "Bugtrap"
+    };
+    const algorithmNames = {
+      cbo: "CBO",
+      mppi_cma: "MPPI-CMA",
+      cmaes: "CMA-ES",
+      cem: "CEM",
+      ps: "Predictive Sampling",
+      dial: "DIAL"
+    };
+    const colors = {
+      cbo: "#e34f31",
+      mppi_cma: "#26866b",
+      cmaes: "#446bc1",
+      cem: "#c18a17",
+      ps: "#8b5ba7",
+      dial: "#167f96"
+    };
+    const tasks = Object.keys(data.tasks);
+    const tabs = document.getElementById("task-tabs");
+    const parameterNumber = new Intl.NumberFormat("zh-CN", { maximumSignificantDigits: 6 });
+
+    function format(value) {
+      return parameterNumber.format(value);
+    }
+
+    function formatCost(value) {
+      const numeric = Number(value);
+      if (!Number.isFinite(numeric)) return numeric === Infinity ? "INF" : "N/A";
+      return numeric.toFixed(6);
+    }
+
+    function formatTime(value) {
+      return Number(value).toFixed(3);
+    }
+
+    function formatSeconds(value) {
+      return Number(value).toFixed(2);
+    }
+
+    function parameterMarkup(parameters) {
+      const entries = Object.entries(parameters);
+      if (!entries.length) return '<p class="empty-parameters">无算法特定参数</p>';
+      return `<dl class="parameters">${entries.map(([key, value]) => `
+        <div class="parameter"><dt>${key}</dt><dd>${format(value)}</dd></div>
+      `).join("")}</dl>`;
+    }
+
+    function renderTabs(activeTask) {
+      tabs.innerHTML = tasks.map((task) => `
+        <button class="task-tab" type="button" role="tab"
+          aria-selected="${task === activeTask}" data-task="${task}">
+          ${taskNames[task]}
+        </button>
+      `).join("");
+      tabs.querySelectorAll("button").forEach((button) => {
+        button.addEventListener("click", () => selectTask(button.dataset.task));
+      });
+    }
+
+    function renderRanking(algorithms) {
+      const entries = Object.entries(algorithms).sort((a, b) => a[1].mean_cost - b[1].mean_cost);
+      const values = entries.map((entry) => entry[1].mean_cost).filter(Number.isFinite);
+      const min = Math.min(...values);
+      const span = Math.max(...values) - min || 1;
+      document.getElementById("ranking").innerHTML = entries.map(([key, result]) => {
+        const width = Number.isFinite(result.mean_cost)
+          ? 22 + 78 * (1 - (result.mean_cost - min) / span) : 0;
+        return `
+          <div class="rank-row" style="--algo-color:${colors[key]}">
+            <span class="rank-name"><i class="rank-swatch"></i>${algorithmNames[key]}</span>
+            <span class="rank-track"><i class="rank-fill" style="width:${width}%"></i></span>
+            <span class="rank-number">${formatCost(result.mean_cost)}</span>
+            <span class="rank-time">${formatTime(result.mean_time_ms)} ms</span>
+          </div>`;
+      }).join("");
+    }
+
+    function renderBudget(budget) {
+      const items = [
+        ["Iterations / plan", budget.iterations],
+        ["Plan horizon", `${formatSeconds(budget.segment_horizon)} s`],
+        ["Execution horizon", `${formatSeconds(budget.execution_horizon)} s`],
+        ["Executed / plan", `${(100 * budget.execution_fraction).toFixed(2)}%`],
+        ["Total horizon", `${formatSeconds(budget.total_horizon)} s`],
+        ["Planning calls", budget.segments],
+        ["Samples / iter", budget.samples],
+        ["Randomizations", budget.randomizations],
+        ["Knots", budget.knots],
+        ["Spline", budget.spline]
+      ];
+      document.getElementById("budget").innerHTML = items.map(([key, value]) => `
+        <div class="budget-item"><span class="budget-key">${key}</span><strong class="budget-value">${value}</strong></div>
+      `).join("");
+    }
+
+    function resultCard(key, result, winnerKey) {
+      const best = key === winnerKey;
+      return `
+        <article class="result-card" style="--algo-color:${colors[key]}">
+          <header class="card-head">
+            <div class="algorithm">
+              <h3>${algorithmNames[key]}</h3>
+              <div class="algorithm-meta">candidate ${result.candidate} · best seed ${result.best_seed}</div>
+            </div>
+            ${best ? '<span class="best-badge">Mean best</span>' : ""}
+          </header>
+          <div class="video-shell">
+            <video controls muted loop playsinline preload="metadata" poster="${result.poster}"
+              aria-label="${algorithmNames[key]} 最优轨迹">
+              <source src="${result.video}" type="video/mp4">
+            </video>
+          </div>
+          <div class="metrics">
+            <div class="metric">
+              <span class="metric-label">平均累计分段代价</span>
+              <strong class="metric-value">${formatCost(result.mean_cost)}</strong>
+              <span class="metric-spread">± ${formatCost(result.std_cost)}</span>
+            </div>
+            <div class="metric">
+              <span class="metric-label">平均累计规划时间</span>
+              <strong class="metric-value">${formatTime(result.mean_time_ms)} ms</strong>
+              <span class="metric-spread">± ${formatTime(result.std_time_ms)} ms</span>
+            </div>
+            <div class="metric">
+              <span class="metric-label">视频重放轨迹代价</span>
+              <strong class="metric-value">${formatCost(result.best_seed_cost)}</strong>
+              <span class="metric-spread">evaluation seed ${result.best_seed}</span>
+            </div>
+          </div>
+          <details>
+            <summary><span>选定算法参数</span><span class="candidate">candidate ${result.candidate}</span></summary>
+            ${parameterMarkup(result.parameters)}
+          </details>
+        </article>`;
+    }
+
+    function selectTask(taskName) {
+      const task = data.tasks[taskName];
+      if (!task) throw new Error(`Unknown task: ${taskName}`);
+      document.querySelectorAll("video").forEach((video) => video.pause());
+      const algorithms = task.algorithms;
+      const winnerKey = Object.keys(algorithms).reduce((best, key) =>
+        algorithms[key].mean_cost < algorithms[best].mean_cost ? key : best
+      );
+      const winner = algorithms[winnerKey];
+
+      renderTabs(taskName);
+      document.getElementById("task-title").textContent = taskNames[taskName];
+      const winnerElement = document.getElementById("winner");
+      winnerElement.style.setProperty("--winner-color", colors[winnerKey]);
+      winnerElement.innerHTML = `
+        <span class="winner-label">跨 seed 均值最优</span>
+        <strong class="winner-name">${algorithmNames[winnerKey]}</strong>
+        <span class="winner-value">cost ${formatCost(winner.mean_cost)} · ${formatTime(winner.mean_time_ms)} ms</span>`;
+      renderRanking(algorithms);
+      renderBudget(task.budget);
+      document.getElementById("result-grid").innerHTML = Object.entries(algorithms)
+        .map(([key, result]) => resultCard(key, result, winnerKey)).join("");
+      history.replaceState(null, "", `#${taskName}`);
+    }
+
+    const algorithmsPerTask = Object.keys(data.tasks[tasks[0]].algorithms).length;
+    document.getElementById("run-meta").innerHTML = `
+      <span><strong>${tasks.length}</strong> tasks</span>
+      <span><strong>${algorithmsPerTask}</strong> algorithms</span>
+      <span><strong>${data.evaluation_seeds.length}</strong> evaluation seeds</span>`;
+    document.getElementById("footer").textContent =
+      `Hydrax · ${data.backend.toUpperCase()} backend · evaluation seeds ${data.evaluation_seeds.join(", ")}`;
+    const initialTask = tasks.includes(location.hash.slice(1)) ? location.hash.slice(1) : tasks[0];
+    selectTask(initialTask);
+  </script>
+</body>
+</html>

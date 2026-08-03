@@ -1,0 +1,50 @@
+backend: jax
+task: double_cart_pole
+domain_seed: 0
+warmup_seed: 999
+seeds:
+- 0
+- 1
+- 2
+- 3
+- 4
+algorithms:
+- cbo
+- mppi_cma
+- cmaes
+- cem
+- ps
+- dial
+iterations:
+- 1
+- 2
+- 4
+- 8
+- 16
+operation_budgets:
+- 8192
+- 4096
+- 2048
+- 1024
+- 512
+execution_fraction: 0.5
+selected_parameters: examples/to/selected_parameters.yaml
+output_dir: examples/to/results/double_cart_pole_scaling
+dashboard_root: examples/to/index.html
+resume: true
+task_config:
+  segment_horizon: 1.0
+  total_horizon: 10.0
+  randomizations: 1
+  knots: 6
+  spline: cubic
+  base_noise: 0.3
+  temperature: 0.1
+baseline:
+  operation_budget: 8192
+  iterations: 8
+  samples: 1024
+render:
+  width: 640
+  height: 400
+  fps: 24

@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,">
+  <title>Hydrax Double Cart Pole Scaling Lab</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #161918;
+      --muted: #66706c;
+      --paper: #eef0ec;
+      --surface: #ffffff;
+      --line: #cfd5d0;
+      --line-strong: #8d9892;
+      --cyan: #007c91;
+      --amber: #e69f00;
+      --coral: #d55e00;
+      --header: #171b19;
+      --radius: 6px;
+      font-family: Aptos, "Segoe UI", sans-serif;
+      font-synthesis: none;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body { margin: 0; background: var(--paper); color: var(--ink); letter-spacing: 0; }
+    button, select { font: inherit; }
+    .topbar {
+      display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 28px;
+      align-items: center; min-height: 88px; padding: 16px max(24px, calc((100vw - 1480px) / 2));
+      color: #f7f8f5; background: var(--header); border-bottom: 4px solid var(--amber);
+    }
+    .brand { min-width: 0; }
+    .brand-kicker { margin: 0 0 5px; color: #74c8d0; font: 700 10px/1.2 ui-monospace, monospace; text-transform: uppercase; }
+    .brand h1 { margin: 0; font: 700 clamp(24px, 3vw, 38px)/1.02 Charter, Cambria, serif; }
+    .run-meta { display: grid; grid-auto-flow: column; gap: 24px; }
+    .run-stat { min-width: 88px; padding-left: 12px; border-left: 1px solid #59615d; }
+    .run-stat span { display: block; color: #9fa8a3; font-size: 9px; text-transform: uppercase; }
+    .run-stat strong { display: block; margin-top: 4px; font: 700 16px/1 ui-monospace, monospace; }
+    .section-nav { position: sticky; top: 0; z-index: 20; background: rgba(238,240,236,.96); border-bottom: 1px solid var(--line-strong); }
+    .section-nav div { width: min(1480px, 100%); margin: auto; padding: 0 24px; display: flex; overflow-x: auto; }
+    .section-nav a { flex: 0 0 auto; padding: 15px 17px 13px; color: var(--muted); border-bottom: 3px solid transparent; font-size: 11px; font-weight: 750; text-decoration: none; text-transform: uppercase; }
+    .section-nav a:hover, .section-nav a:focus-visible { color: var(--ink); border-color: var(--cyan); outline: 0; }
+    main { width: min(1480px, 100%); margin: auto; }
+    .band { padding: 34px 24px 38px; border-bottom: 1px solid var(--line-strong); }
+    .band.surface { background: var(--surface); }
+    .section-head { display: flex; align-items: end; justify-content: space-between; gap: 24px; margin-bottom: 22px; }
+    .section-head h2 { margin: 0; font: 700 24px/1.05 Charter, Cambria, serif; }
+    .section-head p { margin: 5px 0 0; color: var(--muted); font: 11px/1.45 ui-monospace, monospace; }
+    .control { display: flex; align-items: center; gap: 9px; color: var(--muted); font-size: 11px; font-weight: 700; }
+    select { min-height: 36px; padding: 0 32px 0 10px; border: 1px solid var(--line-strong); border-radius: 4px; background: #fff; color: var(--ink); }
+    .baseline-grid, .video-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+    .result-card { min-width: 0; overflow: hidden; border: 1px solid var(--line); border-top: 4px solid var(--method); border-radius: var(--radius); background: #fff; }
+    .card-head { display: flex; align-items: start; justify-content: space-between; gap: 12px; min-height: 62px; padding: 12px 14px; }
+    .card-head h3 { margin: 0; font-size: 14px; }
+    .card-head code { display: block; margin-top: 4px; color: var(--muted); font-size: 9px; }
+    .rank { padding: 3px 6px; border: 1px solid var(--method); border-radius: 3px; font-size: 9px; font-weight: 800; }
+    .video-shell { aspect-ratio: 8 / 5; background: #111715; border-block: 1px solid #323a36; }
+    video { display: block; width: 100%; height: 100%; object-fit: cover; }
+    .metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .metric { min-height: 65px; padding: 11px 12px; border-right: 1px solid var(--line); }
+    .metric:last-child { border-right: 0; }
+    .metric span { display: block; color: var(--muted); font-size: 9px; text-transform: uppercase; }
+    .metric strong { display: block; margin-top: 6px; text-align: right; font: 700 12px/1.2 ui-monospace, monospace; overflow-wrap: anywhere; }
+    .metric small { display: block; margin-top: 3px; color: var(--muted); text-align: right; font: 9px/1.2 ui-monospace, monospace; }
+    .chart-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+    .chart-panel { min-width: 0; border-top: 3px solid var(--cyan); background: #fff; }
+    .chart-panel.wide { grid-column: 1 / -1; }
+    .panel-head { display: flex; justify-content: space-between; gap: 14px; padding: 13px 15px 0; }
+    .panel-head h3 { margin: 0; font-size: 13px; }
+    .panel-head span { color: var(--muted); font: 9px/1.2 ui-monospace, monospace; }
+    .chart { width: 100%; min-height: 310px; padding: 2px 8px 8px; }
+    .chart.facets { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; }
+    .facet { min-width: 0; border-bottom: 1px solid var(--line); }
+    .facet h4 { margin: 8px 12px -4px; font-size: 10px; }
+    svg { display: block; width: 100%; height: auto; overflow: visible; }
+    .axis { stroke: #69736e; stroke-width: 1; }
+    .gridline { stroke: #dfe3df; stroke-width: 1; }
+    .tick { fill: #606965; font: 9px ui-monospace, monospace; }
+    .heat-value { font: 8px ui-monospace, monospace; }
+    .axis-label { fill: #3c4541; font: 10px Aptos, sans-serif; font-weight: 700; }
+    .legend-label { fill: #414a46; font: 9px Aptos, sans-serif; }
+    .budget-controls { display: flex; flex-wrap: wrap; gap: 6px; }
+    .budget-button { min-width: 64px; min-height: 34px; border: 1px solid var(--line-strong); border-radius: 4px; background: transparent; color: var(--muted); cursor: pointer; font-size: 10px; font-weight: 750; }
+    .budget-button:hover { background: #e1e5e1; color: var(--ink); }
+    .budget-button[aria-pressed="true"] { border-color: var(--cyan); background: var(--cyan); color: #fff; }
+    .download-row { display: flex; flex-wrap: wrap; gap: 8px; }
+    .download-row a { padding: 8px 10px; border: 1px solid var(--line-strong); border-radius: 4px; color: var(--ink); font-size: 10px; font-weight: 700; text-decoration: none; }
+    .download-row a:hover { border-color: var(--cyan); color: var(--cyan); }
+    footer { padding: 24px; color: #737c77; background: #171b19; text-align: center; font: 10px/1.5 ui-monospace, monospace; }
+    @media (max-width: 1000px) { .baseline-grid, .video-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .run-meta { display: none; } }
+    @media (max-width: 720px) { .topbar { grid-template-columns: 1fr; min-height: 76px; padding: 15px 16px; } .section-nav div, .band { padding-inline: 14px; } .section-head { align-items: flex-start; flex-direction: column; } .chart-grid, .baseline-grid, .video-grid, .chart.facets { grid-template-columns: 1fr; } .chart-panel.wide { grid-column: auto; } .metrics { grid-template-columns: 1fr 1fr; } .metric:nth-child(2) { border-right: 0; } .metric:last-child { grid-column: 1 / -1; border-top: 1px solid var(--line); } }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><p class="brand-kicker">Hydrax / Receding-horizon study</p><h1>Double Cart Pole Scaling Lab</h1></div>
+    <div class="run-meta" id="run-meta"></div>
+  </header>
+  <nav class="section-nav" aria-label="Dashboard sections"><div>
+    <a href="#baseline">Fixed baseline</a><a href="#curves">Scaling curves</a><a href="#allocation">Allocation study</a><a href="#compute">Actual compute</a><a href="#videos">Best trajectories</a><a href="#artifacts">Artifacts</a><a href="__TASK_DASHBOARD__">Five-task benchmark</a>
+  </div></nav>
+  <main>
+    <section class="band" id="baseline">
+      <div class="section-head"><div><h2>Fixed 8 x 1024 baseline</h2><p>10 s episode / 6 knots / 20 planning calls / five optimizer seeds</p></div></div>
+      <div class="baseline-grid" id="baseline-grid"></div>
+    </section>
+    <section class="band surface" id="curves">
+      <div class="section-head"><div><h2>Best-over-I scaling</h2><p>Selection uses minimum five-seed mean episode cost; bands show one sample standard deviation.</p></div><label class="control">Method <select id="method-filter"></select></label></div>
+      <div class="chart-grid">
+        <article class="chart-panel wide"><div class="panel-head"><h3>Scaling curve</h3><span>lower is better</span></div><div class="chart" id="scaling-chart"></div></article>
+        <article class="chart-panel"><div class="panel-head"><h3>Selected iterations I*</h3><span>argmin over I</span></div><div class="chart" id="iterations-chart"></div></article>
+        <article class="chart-panel"><div class="panel-head"><h3>Selected samples N*</h3><span>N*=O/I*</span></div><div class="chart" id="samples-chart"></div></article>
+      </div>
+    </section>
+    <section class="band" id="allocation">
+      <div class="section-head"><div><h2>Allocation sensitivity</h2><p>Every I,N point is retained; budget families use a common perceptual color scale.</p></div></div>
+      <article class="chart-panel"><div class="panel-head"><h3>Performance vs samples</h3><span>five allocations per O</span></div><div class="chart facets" id="performance-chart"></div></article>
+      <article class="chart-panel" style="margin-top:16px"><div class="panel-head"><h3>Performance vs iterations</h3><span>five allocations per O</span></div><div class="chart facets" id="performance-iterations-chart"></div></article>
+      <article class="chart-panel" style="margin-top:16px"><div class="panel-head"><h3>Optimal configuration trajectory</h3><span>point color encodes O</span></div><div class="chart" id="trajectory-chart"></div></article>
+    </section>
+    <section class="band surface" id="compute">
+      <div class="section-head"><div><h2>Actual compute</h2><p>Five-seed mean cumulative GPU planning time over each 10 s episode.</p></div></div>
+      <article class="chart-panel"><div class="panel-head"><h3>Planning time by I,O allocation</h3><span>shared scale / seconds</span></div><div class="chart facets" id="planning-time-heatmap"></div></article>
+      <article class="chart-panel" style="margin-top:16px"><div class="panel-head"><h3>Time to best performance</h3><span>cost-optimal I*,N* at each O</span></div><div class="chart" id="optimal-time-chart"></div></article>
+    </section>
+    <section class="band" id="videos">
+      <div class="section-head"><div><h2>Best trajectories by budget</h2><p>Each replay uses the lowest-cost seed from the configuration selected by mean cost.</p></div><div class="budget-controls" id="budget-controls"></div></div>
+      <div class="video-grid" id="video-grid"></div>
+    </section>
+    <section class="band surface" id="artifacts">
+      <div class="section-head"><div><h2>Reproducible artifacts</h2><p>Raw episodes, aggregated selections, resolved configuration, and vector figures.</p></div></div>
+      <div class="download-row"><a href="__ARTIFACT_PREFIX__grid_results.csv">Raw CSV</a><a href="__ARTIFACT_PREFIX__aggregate_results.csv">Aggregates</a><a href="__ARTIFACT_PREFIX__scaling_results.csv">Scaling selections</a><a href="__ARTIFACT_PREFIX__report.md">Report</a><a href="__ARTIFACT_PREFIX__resolved_config.yaml">Resolved config</a><a href="__ARTIFACT_PREFIX__figures/scaling_curve.pdf">Scaling PDF</a><a href="__ARTIFACT_PREFIX__figures/performance_vs_samples.pdf">Samples PDF</a><a href="__ARTIFACT_PREFIX__figures/performance_vs_iterations.pdf">Iterations PDF</a><a href="__ARTIFACT_PREFIX__figures/planning_time_heatmap.pdf">Compute heatmap PDF</a><a href="__ARTIFACT_PREFIX__figures/optimal_configuration_planning_time.pdf">Best-time PDF</a></div>
+    </section>
+  </main>
+  <footer id="footer"></footer>
+  <script id="benchmark-data" type="application/json">__BENCHMARK_DATA__</script>
+  <script>
+    "use strict";
+    const data = JSON.parse(document.getElementById("benchmark-data").textContent);
+    const methods = data.metadata.algorithms;
+    const names = data.method_names;
+    const colors = data.method_colors;
+    const budgets = data.metadata.operation_budgets;
+    const budgetColors = ["#3b528b", "#21918c", "#5ec962", "#bddf26", "#fde725"];
+    const heatColors = ["#440154", "#3b528b", "#21918c", "#5ec962", "#fde725"];
+    const fmt = new Intl.NumberFormat("en", { maximumSignificantDigits: 5 });
+    let activeBudget = Math.max(...budgets);
+    const finite = (value) => Number.isFinite(Number(value));
+    const costText = (value) => finite(value) ? Number(value).toFixed(4) : "FAILED";
+    const timeText = (value) => finite(value) ? Number(value).toFixed(3) : "N/A";
+    const selectedMethods = () => document.getElementById("method-filter").value === "all" ? methods : [document.getElementById("method-filter").value];
+
+    function resultCard(row, rank, video) {
+      return `<article class="result-card" style="--method:${colors[row.algorithm]}">
+        <header class="card-head"><div><h3>${names[row.algorithm]}</h3><code>O ${row.nominal_operations} / I ${row.iterations} / N ${row.samples}</code></div><span class="rank">#${rank}</span></header>
+        ${video ? `<div class="video-shell"><video controls muted loop playsinline preload="metadata" poster="${row.poster}"><source src="${row.video}" type="video/mp4"></video></div>` : ""}
+        <div class="metrics"><div class="metric"><span>Mean cost</span><strong>${costText(row.mean_cost)}</strong><small>+/- ${costText(row.std_cost)}</small></div><div class="metric"><span>Planning</span><strong>${timeText(row.mean_planning_time_seconds)} s</strong><small>episode total</small></div><div class="metric"><span>Replay seed</span><strong>${row.replay_seed ?? row.video_seed}</strong><small>cost ${costText(row.replay_cost ?? row.video_seed_cost)}</small></div></div>
+      </article>`;
+    }
+
+    function renderMeta() {
+      const stats = [["Episodes", data.aggregates.length * data.metadata.seeds.length], ["Budgets", budgets.length], ["Methods", methods.length], ["GPU", data.metadata.device.replace("TFRT_", "")]];
+      document.getElementById("run-meta").innerHTML = stats.map(([label, value]) => `<div class="run-stat"><span>${label}</span><strong>${value}</strong></div>`).join("");
+      document.getElementById("footer").textContent = `Hydrax / ${data.metadata.backend.toUpperCase()} / commit ${data.metadata.git_commit.slice(0, 10)} / generated ${data.metadata.created_at}`;
+    }
+
+    function renderBaseline() {
+      const ranked = [...data.baseline].sort((a, b) => (a.mean_cost ?? Infinity) - (b.mean_cost ?? Infinity));
+      document.getElementById("baseline-grid").innerHTML = ranked.map((row, index) => resultCard(row, index + 1, true)).join("");
+    }
+
+    function logScale(value, min, max, start, end) { return start + (Math.log2(value) - Math.log2(min)) / (Math.log2(max) - Math.log2(min)) * (end - start); }
+    function linearScale(value, min, max, start, end) { return start + (value - min) / (max - min || 1) * (end - start); }
+    function pathFor(points, xMap, yMap) { return points.map((point, index) => `${index ? "L" : "M"}${xMap(point.x).toFixed(2)},${yMap(point.y).toFixed(2)}`).join(" "); }
+    function rgb(hex) { return [1, 3, 5].map(index => parseInt(hex.slice(index, index + 2), 16)); }
+    function heatColor(value, min, max) { const position = Math.max(0, Math.min(.999999, (value-min)/(max-min || 1))) * (heatColors.length-1), index = Math.floor(position), fraction = position-index, start = rgb(heatColors[index]), end = rgb(heatColors[index+1]); return `rgb(${start.map((channel, offset) => Math.round(channel+(end[offset]-channel)*fraction)).join(",")})`; }
+    function contrastColor(color) { const channels = color.match(/\d+/g).map(Number), luminance = .2126*channels[0]+.7152*channels[1]+.0722*channels[2]; return luminance < 120 ? "#fff" : "#171b19"; }
+
+    function lineChart(target, series, options) {
+      const width = 760, height = 320, margin = { left: 72, right: 22, top: 32, bottom: 52 };
+      const points = series.flatMap(item => item.points).filter(point => finite(point.y));
+      if (!points.length) { target.innerHTML = ""; return; }
+      const xValues = options.xTicks.map(Number), xMin = Math.min(...xValues), xMax = Math.max(...xValues);
+      const yValues = points.flatMap(point => [point.y - (point.std || 0), point.y + (point.std || 0)]);
+      let yMin = options.yTicks ? Math.min(...options.yTicks) : Math.min(...yValues);
+      let yMax = options.yTicks ? Math.max(...options.yTicks) : Math.max(...yValues);
+      if (!options.logY) { const pad = Math.max((yMax - yMin) * .09, Math.abs(yMax) * .02, .01); yMin -= pad; yMax += pad; }
+      const xMap = value => options.logX ? logScale(value, xMin, xMax, margin.left, width - margin.right) : linearScale(value, xMin, xMax, margin.left, width - margin.right);
+      const yMap = value => options.logY ? logScale(value, yMin, yMax, height - margin.bottom, margin.top) : linearScale(value, yMin, yMax, height - margin.bottom, margin.top);
+      const yTicks = options.yTicks || Array.from({ length: 5 }, (_, index) => yMin + index * (yMax - yMin) / 4);
+      let svg = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${options.label}">`;
+      options.xTicks.forEach(tick => { const x = xMap(tick); svg += `<line class="gridline" x1="${x}" y1="${margin.top}" x2="${x}" y2="${height-margin.bottom}"/><text class="tick" x="${x}" y="${height-margin.bottom+18}" text-anchor="middle">${tick}</text>`; });
+      yTicks.forEach(tick => { const y = yMap(tick); svg += `<line class="gridline" x1="${margin.left}" y1="${y}" x2="${width-margin.right}" y2="${y}"/><text class="tick" x="${margin.left-9}" y="${y+3}" text-anchor="end">${fmt.format(tick)}</text>`; });
+      svg += `<line class="axis" x1="${margin.left}" y1="${margin.top}" x2="${margin.left}" y2="${height-margin.bottom}"/><line class="axis" x1="${margin.left}" y1="${height-margin.bottom}" x2="${width-margin.right}" y2="${height-margin.bottom}"/>`;
+      series.forEach((item, seriesIndex) => {
+        const valid = item.points.filter(point => finite(point.y));
+        svg += `<path d="${pathFor(valid, xMap, yMap)}" fill="none" stroke="${item.color}" stroke-width="2" stroke-dasharray="${item.dash || "none"}"/>`;
+        valid.forEach(point => { const x = xMap(point.x), y = yMap(point.y), pointColor = point.color || item.color; if (point.std) { const top = yMap(point.y + point.std), bottom = yMap(point.y - point.std); svg += `<line x1="${x}" y1="${top}" x2="${x}" y2="${bottom}" stroke="${item.color}"/><line x1="${x-3}" y1="${top}" x2="${x+3}" y2="${top}" stroke="${item.color}"/><line x1="${x-3}" y1="${bottom}" x2="${x+3}" y2="${bottom}" stroke="${item.color}"/>`; } svg += `<circle cx="${x}" cy="${y}" r="4" fill="${pointColor}" stroke="${item.color}" stroke-width="1.3"><title>${point.title}</title></circle>`; });
+        const legendX = margin.left + seriesIndex % 3 * 200, legendY = 12 + Math.floor(seriesIndex / 3) * 14; svg += `<line x1="${legendX}" y1="${legendY}" x2="${legendX+18}" y2="${legendY}" stroke="${item.color}" stroke-width="2"/><text class="legend-label" x="${legendX+23}" y="${legendY+3}">${item.name}</text>`;
+      });
+      svg += `<text class="axis-label" x="${(margin.left+width-margin.right)/2}" y="${height-8}" text-anchor="middle">${options.xLabel}</text><text class="axis-label" transform="translate(14 ${(margin.top+height-margin.bottom)/2}) rotate(-90)" text-anchor="middle">${options.yLabel}</text></svg>`;
+      target.innerHTML = svg;
+    }
+
+    function heatmapChart(target, rows, options) {
+      const width = 760, height = 320, margin = { left: 72, right: 112, top: 18, bottom: 55 };
+      const cellWidth = (width-margin.left-margin.right)/options.xTicks.length, cellHeight = (height-margin.top-margin.bottom)/options.yTicks.length;
+      const indexed = new Map(rows.map(row => [`${row.iterations}-${row.nominal_operations}`, row]));
+      let svg = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${options.label}">`;
+      options.yTicks.forEach((iteration, rowIndex) => options.xTicks.forEach((budget, columnIndex) => {
+        const row = indexed.get(`${iteration}-${budget}`); if (!row) throw new Error(`Missing heatmap cell I=${iteration}, O=${budget}`);
+        const x = margin.left+columnIndex*cellWidth, y = margin.top+(options.yTicks.length-rowIndex-1)*cellHeight, value = row.mean_planning_time_seconds, color = heatColor(value, options.min, options.max);
+        svg += `<rect x="${x}" y="${y}" width="${cellWidth+.2}" height="${cellHeight+.2}" fill="${color}" stroke="#fff" stroke-width="1"><title>O ${budget} / I ${iteration} / N ${row.samples} / ${value.toFixed(4)} s</title></rect><text x="${x+cellWidth/2}" y="${y+cellHeight/2+3}" text-anchor="middle" class="heat-value" fill="${contrastColor(color)}">${value.toFixed(2)}</text>`;
+      }));
+      options.xTicks.forEach((tick, index) => { const x = margin.left+(index+.5)*cellWidth; svg += `<text class="tick" x="${x}" y="${height-margin.bottom+19}" text-anchor="middle">${tick}</text>`; });
+      options.yTicks.forEach((tick, index) => { const y = margin.top+(options.yTicks.length-index-.5)*cellHeight; svg += `<text class="tick" x="${margin.left-9}" y="${y+3}" text-anchor="end">${tick}</text>`; });
+      const legendX = width-72, legendTop = margin.top, legendHeight = height-margin.top-margin.bottom, steps = 36;
+      for (let index=0; index<steps; index++) { const ratio = index/(steps-1), value = options.max-ratio*(options.max-options.min); svg += `<rect x="${legendX}" y="${legendTop+index*legendHeight/steps}" width="12" height="${legendHeight/steps+.4}" fill="${heatColor(value, options.min, options.max)}"/>`; }
+      [options.max, (options.min+options.max)/2, options.min].forEach((value, index) => { const y = legendTop+index*legendHeight/2; svg += `<text class="tick" x="${legendX+18}" y="${y+3}">${value.toFixed(2)}</text>`; });
+      svg += `<text class="axis-label" x="${(margin.left+width-margin.right)/2}" y="${height-8}" text-anchor="middle">Operation budget O</text><text class="axis-label" transform="translate(14 ${(margin.top+height-margin.bottom)/2}) rotate(-90)" text-anchor="middle">Iterations I</text><text class="axis-label" transform="translate(${width-12} ${(margin.top+height-margin.bottom)/2}) rotate(-90)" text-anchor="middle">Seconds / episode</text></svg>`;
+      target.innerHTML = svg;
+    }
+
+    function scalingSeries(field) {
+      return selectedMethods().map(method => ({ name: names[method], color: colors[method], points: data.scaling.filter(row => row.algorithm === method).sort((a,b) => a.nominal_operations-b.nominal_operations).map(row => ({ x: row.nominal_operations, y: row[field], std: field === "mean_cost" ? row.std_cost : 0, title: `${names[method]} / O ${row.nominal_operations} / I ${row.iterations} / N ${row.samples} / mean ${costText(row.mean_cost)}` })) }));
+    }
+
+    function renderPrimaryCharts() {
+      lineChart(document.getElementById("scaling-chart"), scalingSeries("mean_cost"), { xTicks: budgets, xLabel: "Operation budget O", yLabel: "Episode cost", label: "Best over iterations scaling curve", logX: true, logY: false });
+      lineChart(document.getElementById("iterations-chart"), scalingSeries("iterations"), { xTicks: budgets, yTicks: data.metadata.iterations, xLabel: "Operation budget O", yLabel: "Selected I*", label: "Selected iterations", logX: true, logY: true });
+      const sampleTicks = [...new Set(data.scaling.filter(row => selectedMethods().includes(row.algorithm)).map(row => row.samples))].sort((a,b) => a-b);
+      lineChart(document.getElementById("samples-chart"), scalingSeries("samples"), { xTicks: budgets, yTicks: sampleTicks, xLabel: "Operation budget O", yLabel: "Selected N*", label: "Selected samples", logX: true, logY: true });
+    }
+
+    function allocationSeries(method, xField) {
+      return budgets.map((budget, index) => ({ name: `O ${budget}`, color: budgetColors[index], points: data.aggregates.filter(row => row.algorithm === method && row.nominal_operations === budget).sort((a,b) => a[xField]-b[xField]).map(row => ({ x: row[xField], y: row.mean_cost, std: row.std_cost, title: `${names[method]} / O ${budget} / I ${row.iterations} / N ${row.samples} / mean ${costText(row.mean_cost)}` })) }));
+    }
+
+    function renderPerformanceChart(targetId, xField, xLabel) {
+      const target = document.getElementById(targetId), chosen = selectedMethods();
+      target.classList.toggle("facets", chosen.length > 1);
+      target.innerHTML = chosen.map(method => `<div class="facet"><h4>${names[method]}</h4><div id="facet-${xField}-${method}"></div></div>`).join("");
+      chosen.forEach(method => { const rows = data.aggregates.filter(row => row.algorithm === method); const ticks = [...new Set(rows.map(row => row[xField]))].sort((a,b) => a-b); lineChart(document.getElementById(`facet-${xField}-${method}`), allocationSeries(method, xField), { xTicks: ticks, xLabel, yLabel: "Episode cost", label: `${names[method]} allocation sensitivity by ${xLabel}`, logX: true, logY: false }); });
+    }
+
+    function renderPerformance() {
+      renderPerformanceChart("performance-chart", "samples", "Samples N");
+      renderPerformanceChart("performance-iterations-chart", "iterations", "Iterations I");
+    }
+
+    function renderCompute() {
+      const chosen = selectedMethods(), target = document.getElementById("planning-time-heatmap"), allTimes = data.aggregates.map(row => row.mean_planning_time_seconds), minimum = Math.min(...allTimes), maximum = Math.max(...allTimes);
+      target.classList.toggle("facets", chosen.length > 1);
+      target.innerHTML = chosen.map(method => `<div class="facet"><h4>${names[method]}</h4><div id="heatmap-${method}"></div></div>`).join("");
+      chosen.forEach(method => heatmapChart(document.getElementById(`heatmap-${method}`), data.aggregates.filter(row => row.algorithm === method), { xTicks: budgets, yTicks: data.metadata.iterations, min: minimum, max: maximum, label: `${names[method]} planning time by allocation` }));
+      const series = chosen.map(method => ({ name: names[method], color: colors[method], points: data.scaling.filter(row => row.algorithm === method).sort((a,b) => a.nominal_operations-b.nominal_operations).map(row => ({ x: row.nominal_operations, y: row.mean_planning_time_seconds, std: row.std_planning_time_seconds, title: `${names[method]} / O ${row.nominal_operations} / I* ${row.iterations} / N* ${row.samples} / ${row.mean_planning_time_seconds.toFixed(4)} s` })) }));
+      lineChart(document.getElementById("optimal-time-chart"), series, { xTicks: budgets, xLabel: "Operation budget O", yLabel: "Planning time / episode (s)", label: "Planning time of cost-optimal allocations", logX: true, logY: false });
+    }
+
+    function renderTrajectory() {
+      const series = selectedMethods().map(method => ({ name: names[method], color: colors[method], points: data.scaling.filter(row => row.algorithm === method).sort((a,b) => a.nominal_operations-b.nominal_operations).map(row => ({ x: row.samples, y: row.iterations, color: budgetColors[budgets.indexOf(row.nominal_operations)], title: `${names[method]} / O ${row.nominal_operations} / I* ${row.iterations} / N* ${row.samples}` })) }));
+      const rows = data.scaling.filter(row => selectedMethods().includes(row.algorithm));
+      lineChart(document.getElementById("trajectory-chart"), series, { xTicks: [...new Set(rows.map(row => row.samples))].sort((a,b) => a-b), yTicks: data.metadata.iterations, xLabel: "Selected samples N*", yLabel: "Selected iterations I*", label: "Optimal configuration trajectories", logX: true, logY: true });
+    }
+
+    function renderBudgetControls() {
+      document.getElementById("budget-controls").innerHTML = budgets.map(budget => `<button class="budget-button" type="button" aria-pressed="${budget === activeBudget}" data-budget="${budget}">O ${budget}</button>`).join("");
+      document.querySelectorAll(".budget-button").forEach(button => button.addEventListener("click", () => { activeBudget = Number(button.dataset.budget); renderBudgetControls(); renderVideos(); }));
+    }
+
+    function renderVideos() {
+      const rows = data.scaling.filter(row => row.nominal_operations === activeBudget && selectedMethods().includes(row.algorithm)).sort((a,b) => (a.mean_cost ?? Infinity)-(b.mean_cost ?? Infinity));
+      document.getElementById("video-grid").innerHTML = rows.map((row, index) => resultCard(row, index+1, true)).join("");
+    }
+
+    function renderAll() { renderPrimaryCharts(); renderPerformance(); renderTrajectory(); renderCompute(); renderVideos(); }
+    const filter = document.getElementById("method-filter");
+    filter.innerHTML = `<option value="all">All methods</option>` + methods.map(method => `<option value="${method}">${names[method]}</option>`).join("");
+    filter.addEventListener("change", renderAll);
+    renderMeta(); renderBaseline(); renderBudgetControls(); renderAll();
+  </script>
+</body>
+</html>
