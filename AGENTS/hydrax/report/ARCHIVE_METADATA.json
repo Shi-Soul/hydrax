@@ -1,0 +1,48 @@
+{
+  "archive_version": 1,
+  "created_at": "2026-08-03T13:41:39+08:00",
+  "source_repository": "/home/bai/MPC-RL/hydrax",
+  "source_head_before_archive": "76da3a47ce648539a349d493b3932074d67d538a",
+  "entries": [
+    {
+      "directory": "01_legacy_open_loop",
+      "source_commit": "04a236ee6a395c65d793dbc3324b1d548918e08d",
+      "experiment": "five-task open-loop tuning and evaluation",
+      "tuning_rows": 160,
+      "evaluation_rows": 150,
+      "raw_data_complete": true
+    },
+    {
+      "directory": "02_legacy_receding_horizon",
+      "source_commit": "96ff79ac9a8167291bb86f08a9a6311a91cad50a",
+      "experiment": "five-task receding-horizon dashboard snapshot",
+      "tasks": 5,
+      "methods_per_task": 6,
+      "evaluation_seeds_represented": 5,
+      "video_count": 30,
+      "raw_data_complete": false,
+      "missing": [
+        "per-seed receding-horizon CSV"
+      ]
+    },
+    {
+      "directory": "03_cart_pole_horizon_2s",
+      "source_commit": "96ff79ac9a8167291bb86f08a9a6311a91cad50a",
+      "experiment": "Cart Pole two-second receding-horizon rerun",
+      "evaluation_rows": 30,
+      "video_count": 6,
+      "raw_data_complete": true
+    },
+    {
+      "directory": "04_double_cart_pole_scaling",
+      "source_commit": "76da3a47ce648539a349d493b3932074d67d538a",
+      "experiment": "Double Cart Pole operation-budget scaling",
+      "episode_rows": 750,
+      "aggregate_rows": 150,
+      "selected_rows": 30,
+      "figure_pairs": 8,
+      "video_count": 36,
+      "raw_data_complete": true
+    }
+  ]
+}
